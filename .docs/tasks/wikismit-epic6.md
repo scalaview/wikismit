@@ -1,8 +1,8 @@
 # wikismit — Epic 6: Incremental Update + CI Examples
 
-**Status:** `todo`  
-**Depends on:** Epic 5  
-**Goal:** `wikismit update` re-runs only the pipeline phases needed for changed files, producing output identical to a full run for the changed modules. CI example files allow users to deploy docs to GitHub Pages with minimal setup.  
+**Status:** `todo`
+**Depends on:** Epic 5
+**Goal:** `wikismit update` re-runs only the pipeline phases needed for changed files, producing output identical to a full run for the changed modules. CI example files allow users to deploy docs to GitHub Pages with minimal setup.
 **Spec refs:** §9 Incremental Update Mode, §16 CI integration examples
 
 ---
@@ -11,7 +11,7 @@
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `pkg/gitdiff/diff.go` using `go-git`. Given a repository path and optional base/head refs, return the set of modified file paths relative to the repo root. Support `--changed-files` to bypass git entirely.
 
 **Acceptance criteria:**
@@ -92,7 +92,7 @@ func GetChangedFiles(repoPath, baseRef, headRef string) ([]FileChange, error)
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Given the set of changed files and `dep_graph.json`, compute which modules must be re-run: direct owners of changed files plus all upstream modules that transitively depend on them.
 
 **Acceptance criteria:**
@@ -143,7 +143,7 @@ internal/analyzer/affected_test.go
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement the `wikismit update` command. Load existing artifacts, compute affected modules, re-run Phase 3 for affected shared modules and Phase 4 for affected non-shared modules, then run Phase 5 in full. Fall back to full generate if no artifacts exist.
 
 **Acceptance criteria:**
@@ -241,7 +241,7 @@ func RunIncremental(ctx context.Context, cfg *config.Config, llm llm.Client) err
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Write the example GitHub Actions workflow files and README in `examples/github/`. Workflows use the final CLI. README is self-contained for a new user setting up GitHub Pages.
 
 **Acceptance criteria:**
@@ -287,7 +287,7 @@ jobs:
 
       - name: Install wikismit
         run: |
-          curl -sSL https://github.com/your-org/wikismit/releases/latest/download/wikismit-linux-amd64 \
+          curl -sSL https://github.com/scalaview/wikismit/releases/latest/download/wikismit-linux-amd64 \
             -o /usr/local/bin/wikismit && chmod +x /usr/local/bin/wikismit
 
       - name: Generate docs
@@ -341,7 +341,7 @@ jobs:
 
       - name: Install wikismit
         run: |
-          curl -sSL https://github.com/your-org/wikismit/releases/latest/download/wikismit-linux-amd64 \
+          curl -sSL https://github.com/scalaview/wikismit/releases/latest/download/wikismit-linux-amd64 \
             -o /usr/local/bin/wikismit && chmod +x /usr/local/bin/wikismit
 
       - name: Update docs

@@ -1,8 +1,8 @@
 # wikismit — Epic 1: Project Scaffold + LLM Client
 
-**Status:** `todo`  
-**Depends on:** —  
-**Goal:** A runnable CLI binary that can read config and make a real LLM call. All subsequent Epics build on this foundation.  
+**Status:** `todo`
+**Depends on:** —
+**Goal:** A runnable CLI binary that can read config and make a real LLM call. All subsequent Epics build on this foundation.
 **Spec refs:** §6 Directory Structure, §8 LLM Integration, §10 CLI Design, §11 Configuration
 
 ---
@@ -11,7 +11,7 @@
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Initialise the Go module, directory structure, and Cobra CLI. Implement config loading from `config.yaml` with env var override for `api_key_env`. The binary must respond to `--help` and load config without panicking.
 
 **Acceptance criteria:**
@@ -40,7 +40,7 @@ go.mod
 
 #### S1.1.1 — Initialise Go module and directory skeleton
 
-- Run `go mod init github.com/your-org/wikismit`
+- Run `go mod init github.com/scalaview/wikismit`
 - Create the full directory tree from §6 of the tech spec as empty directories with `.gitkeep`
 - Add `go.sum` and `go.mod` with initial dependencies: `github.com/spf13/cobra`, `gopkg.in/yaml.v3`
 - Verify `go mod tidy` runs without error
@@ -94,7 +94,7 @@ go.mod
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `internal/llm/client.go` wrapping `go-openai`. The `Client` interface exposes `Complete(ctx, CompletionRequest) (string, error)`. Base URL, model, and timeout must be configurable. Works with any OpenAI-compatible endpoint.
 
 **Acceptance criteria:**
@@ -167,7 +167,7 @@ internal/llm/client_test.go
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `internal/llm/retry.go`. Wrap the base client with retry logic for retryable errors. Max 3 retries, initial backoff 2s, max backoff 30s, with jitter.
 
 **Acceptance criteria:**
@@ -229,7 +229,7 @@ internal/llm/retry_test.go
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `MockClient` satisfying the `Client` interface. Returns pre-configured responses in sequence and records all calls for test assertions.
 
 **Acceptance criteria:**
@@ -286,7 +286,7 @@ internal/llm/mock_test.go
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `pkg/store` as the single read/write interface for all JSON artifacts. All pipeline phases use this package for artifact IO; no phase handles file serialisation directly. Writes are atomic (temp file + rename).
 
 **Acceptance criteria:**

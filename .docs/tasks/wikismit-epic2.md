@@ -1,8 +1,8 @@
 # wikismit — Epic 2: Phase 1 — AST Analysis (Go)
 
-**Status:** `todo`  
-**Depends on:** Epic 1  
-**Goal:** Given a Go repository path, produce `file_index.json` and `dep_graph.json` with correct symbol extraction and `file:line` references preserved. No LLM calls in this phase.  
+**Status:** `todo`
+**Depends on:** Epic 1
+**Goal:** Given a Go repository path, produce `file_index.json` and `dep_graph.json` with correct symbol extraction and `file:line` references preserved. No LLM calls in this phase.
 **Spec refs:** §4 Phase 1, §5 Artifact Schemas, §7 Key Interfaces
 
 ---
@@ -11,7 +11,7 @@
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `internal/analyzer/lang/golang.go`. Parse a single `.go` file using `go-tree-sitter` and return a `FileEntry` with all function declarations, type declarations, and imports. Preserve `line_start`/`line_end` for every symbol. Compute `content_hash` as `sha256` of file bytes.
 
 **Acceptance criteria:**
@@ -34,8 +34,8 @@ testdata/fixtures/golang/complex.golden.json
 
 #### S2.1.1 — Add tree-sitter dependency and language grammar
 
-- Add `github.com/smacker/go-tree-sitter` to `go.mod`
-- Import the Go grammar: `github.com/smacker/go-tree-sitter/golang`
+- Add `github.com/tree-sitter/go-tree-sitter` to `go.mod`
+- Import the Go grammar: `github.com/tree-sitter/go-tree-sitter/golang`
 - Write a `newGoParser() *sitter.Parser` helper that initialises the parser with the Go language grammar
 - Verify the parser can parse a minimal `package main` file without error
 
@@ -105,7 +105,7 @@ testdata/fixtures/golang/complex.golden.json
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `internal/analyzer/analyzer.go`. Recursively walk the repository, apply `exclude_patterns`, dispatch to the registered language parser for each file, and return a complete `FileIndex`.
 
 **Acceptance criteria:**
@@ -182,7 +182,7 @@ This gives: 4 non-shared modules (`cmd`, `api`, `auth`, `db`) + 2 shared modules
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Implement `internal/analyzer/dep_graph.go`. From the `FileIndex`, build a directed adjacency list of internal import dependencies. Resolve which imports are internal by comparing against the module path from `go.mod`.
 
 **Acceptance criteria:**
@@ -236,7 +236,7 @@ internal/analyzer/dep_graph_test.go
 
 **Status:** `todo`
 
-**Description:**  
+**Description:**
 Wire S2.1–S2.3 into the Phase 1 step of `wikismit generate`. Run the analyzer, write both artifacts via `pkg/store`, log progress. Phase 1 must complete before Phase 2 begins.
 
 **Acceptance criteria:**
