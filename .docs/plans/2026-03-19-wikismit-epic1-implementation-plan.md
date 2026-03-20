@@ -451,7 +451,7 @@ type CompletionRequest struct {
 }
 
 type Client interface {
-	Complete(ctx context.Context, req CompletionRequest) (string, error)
+	Complete(ctx context.Context, req *CompletionRequest) (string, error)
 }
 ```
 
@@ -699,7 +699,7 @@ Implement exactly these members:
 type MockClient struct {
 	responses []string
 	errors    []error
-	calls     []CompletionRequest
+	calls     []*CompletionRequest
 	mu        sync.Mutex
 }
 ```
@@ -708,8 +708,8 @@ And:
 
 - `NewMockClient(responses ...string) *MockClient`
 - `WithErrors(errs ...error) *MockClient`
-- `Complete(ctx context.Context, req CompletionRequest) (string, error)`
-- `Calls() []CompletionRequest`
+- `Complete(ctx context.Context, req *CompletionRequest) (string, error)`
+- `Calls() []*CompletionRequest`
 - `CallCount() int`
 
 If you want assertion helpers, add them only if they keep the package simple.
