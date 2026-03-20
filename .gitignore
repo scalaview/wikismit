@@ -1,2 +1,8 @@
 .omc
 .docs/tmp
+config.yaml
+artifacts/*.json
+artifacts/cache/
+artifacts/module_docs/*.md
+docs/.vitepress/dist/
+./wikismit
