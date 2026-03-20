@@ -1,0 +1,35 @@
+{
+  "language": "go",
+  "content_hash": "a2d46b042cb6683e08330f794c90f21b827beb53ea15bb238688015628dcd962",
+  "functions": [
+    {
+      "name": "Exported",
+      "signature": "func Exported(name string) string",
+      "line_start": 7,
+      "line_end": 9,
+      "exported": true
+    },
+    {
+      "name": "hidden",
+      "signature": "func hidden()",
+      "line_start": 11,
+      "line_end": 11,
+      "exported": false
+    }
+  ],
+  "types": [
+    {
+      "name": "Widget",
+      "kind": "struct",
+      "line_start": 5,
+      "line_end": 5,
+      "exported": true
+    }
+  ],
+  "imports": [
+    {
+      "path": "fmt",
+      "internal": false
+    }
+  ]
+}

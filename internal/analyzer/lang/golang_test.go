@@ -1,8 +1,12 @@
 package lang
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -63,4 +67,41 @@ func TestExtractSymbolsReturnsLanguageAndHashForEmptyGoFile(t *testing.T) {
 	}
 
 	var _ store.FileEntry = entry
+}
+
+func TestExtractSymbolsMatchesSimpleGolden(t *testing.T) {
+	fixturePath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "simple.go")
+	goldenPath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "simple.golden.json")
+
+	src, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
+	}
+	parser := &goParser{}
+	got, err := parser.ExtractSymbols("simple.go", src)
+	if err != nil {
+		t.Fatalf("ExtractSymbols() error = %v", err)
+	}
+
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", goldenPath, err)
+	}
+
+	gotJSON, err := marshalGolden(got)
+	if err != nil {
+		t.Fatalf("marshalGolden() error = %v", err)
+	}
+
+	if diff := cmp.Diff(string(want), string(gotJSON)); diff != "" {
+		t.Fatalf("simple golden mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func marshalGolden(entry store.FileEntry) ([]byte, error) {
+	data, err := json.MarshalIndent(entry, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
 }
