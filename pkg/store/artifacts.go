@@ -24,12 +24,14 @@ type TypeDecl struct {
 	Name      string `json:"name"`
 	Kind      string `json:"kind"`
 	LineStart int    `json:"line_start"`
+	LineEnd   int    `json:"line_end"`
 	Exported  bool   `json:"exported"`
 }
 
 type Import struct {
-	Path     string `json:"path"`
-	Internal bool   `json:"internal"`
+	Path         string `json:"path"`
+	Internal     bool   `json:"internal"`
+	ResolvedPath string `json:"-"`
 }
 
 type DepGraph map[string][]string
