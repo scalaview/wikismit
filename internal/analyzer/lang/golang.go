@@ -16,9 +16,16 @@ const simpleGoQuery = `
 (function_declaration
   name: (identifier) @function.name) @function.decl
 
+(method_declaration
+  name: (field_identifier) @method.name) @method.decl
+
 (type_spec
   name: (type_identifier) @type.name
-  type: (struct_type) @type.kind) @type.decl
+  type: (_) @type.kind) @type.decl
+
+(type_alias
+  name: (type_identifier) @alias.name
+  type: (_) @alias.kind) @alias.decl
 
 (import_spec
   path: (interpreted_string_literal) @import.path) @import.decl
@@ -92,14 +99,41 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 			continue
 		}
 
+		if methodNode, ok := captureMap["method.decl"]; ok {
+			nameNode := captureMap["method.name"]
+			name := nameNode.Utf8Text(src)
+			functions = append(functions, store.FunctionDecl{
+				Name:      name,
+				Signature: sourceForNode(src, methodNode),
+				LineStart: lineNumber(methodNode.StartPosition()),
+				LineEnd:   lineNumber(methodNode.EndPosition()),
+				Exported:  isExported(name),
+			})
+			continue
+		}
+
 		if typeNode, ok := captureMap["type.decl"]; ok {
 			nameNode := captureMap["type.name"]
+			kindNode := captureMap["type.kind"]
 			name := nameNode.Utf8Text(src)
 			types = append(types, store.TypeDecl{
 				Name:      name,
-				Kind:      "struct",
+				Kind:      typeKind(kindNode),
 				LineStart: lineNumber(typeNode.StartPosition()),
 				LineEnd:   lineNumber(typeNode.EndPosition()),
+				Exported:  isExported(name),
+			})
+			continue
+		}
+
+		if aliasNode, ok := captureMap["alias.decl"]; ok {
+			nameNode := captureMap["alias.name"]
+			name := nameNode.Utf8Text(src)
+			types = append(types, store.TypeDecl{
+				Name:      name,
+				Kind:      "alias",
+				LineStart: lineNumber(aliasNode.StartPosition()),
+				LineEnd:   lineNumber(aliasNode.EndPosition()),
 				Exported:  isExported(name),
 			})
 			continue
@@ -155,4 +189,18 @@ func isExported(name string) bool {
 		return false
 	}
 	return unicode.IsUpper([]rune(name)[0])
+}
+
+func typeKind(node *sitter.Node) string {
+	if node == nil {
+		return "alias"
+	}
+	switch node.Kind() {
+	case "struct_type":
+		return "struct"
+	case "interface_type":
+		return "interface"
+	default:
+		return "alias"
+	}
 }

@@ -1,0 +1,53 @@
+{
+  "language": "go",
+  "content_hash": "4dd85b7f6cd9260769bb15f2627e2250f49f96d83f90adc7462948e6bd06e77e",
+  "functions": [
+    {
+      "name": "Run",
+      "signature": "func (w *Widget) Run(ctx context.Context) error",
+      "line_start": 16,
+      "line_end": 19,
+      "exported": true
+    },
+    {
+      "name": "Build",
+      "signature": "func Build(name string) (string, error)",
+      "line_start": 21,
+      "line_end": 23,
+      "exported": true
+    }
+  ],
+  "types": [
+    {
+      "name": "Service",
+      "kind": "interface",
+      "line_start": 8,
+      "line_end": 10,
+      "exported": true
+    },
+    {
+      "name": "Alias",
+      "kind": "alias",
+      "line_start": 12,
+      "line_end": 12,
+      "exported": true
+    },
+    {
+      "name": "Widget",
+      "kind": "struct",
+      "line_start": 14,
+      "line_end": 14,
+      "exported": true
+    }
+  ],
+  "imports": [
+    {
+      "path": "context",
+      "internal": false
+    },
+    {
+      "path": "fmt",
+      "internal": false
+    }
+  ]
+}
