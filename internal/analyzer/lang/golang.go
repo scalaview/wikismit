@@ -68,6 +68,9 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 
 	tree := parser.Parse(src, nil)
 	defer tree.Close()
+	if tree.RootNode().HasError() {
+		return store.FileEntry{}, fmt.Errorf("parse Go file %q: syntax error", path)
+	}
 
 	query, queryErr := sitter.NewQuery(sitter.NewLanguage(treeSitterGo.Language()), simpleGoQuery)
 	if queryErr != nil {
