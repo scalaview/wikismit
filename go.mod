@@ -3,6 +3,7 @@ module github.com/scalaview/wikismit
 go 1.25.0
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/google/go-cmp v0.7.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/spf13/cobra v1.10.2
