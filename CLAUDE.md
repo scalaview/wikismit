@@ -1,0 +1,3 @@
+<!--  -->
+In Golang, try to use pointers for parameters and internal objects within structs. This allows for more efficient memory usage and can help avoid unnecessary copying of data. When you pass a pointer to a function, you are passing the memory address of the variable, which can be more efficient than passing a copy of the variable itself. Additionally, using pointers can allow you to modify the original variable within the function, which can be useful in certain cases. However, it's important to use pointers carefully and ensure that you are not creating memory leaks or dereferencing nil pointers.
+<!--  -->
