@@ -27,6 +27,9 @@ func NewAnalyzer(cfg configpkg.AnalysisConfig) *Analyzer {
 
 func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 	idx := store.FileIndex{}
+	if err := a.ensureModulePath(repoPath); err != nil {
+		return nil, err
+	}
 
 	err := filepath.WalkDir(repoPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -60,6 +63,9 @@ func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 		if parseErr != nil {
 			a.skippedFiles++
 			return nil
+		}
+		if resolveErr := a.resolveImports(repoPath, &entry); resolveErr != nil {
+			return resolveErr
 		}
 
 		idx[relPath] = entry
