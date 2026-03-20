@@ -10,6 +10,9 @@ import (
 
 var configPath string
 var verbose bool
+var repoPathOverride string
+var outputDirOverride string
+var artifactsDirOverride string
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
@@ -24,6 +27,9 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./config.yaml", "Path to config.yaml")
+	rootCmd.PersistentFlags().StringVar(&repoPathOverride, "repo", "", "Repository root path")
+	rootCmd.PersistentFlags().StringVar(&outputDirOverride, "output", "", "Output directory for generated docs")
+	rootCmd.PersistentFlags().StringVar(&artifactsDirOverride, "artifacts", "", "Artifacts directory")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 
 	rootCmd.AddCommand(
@@ -45,7 +51,20 @@ func loadAndValidateConfig() (*configpkg.Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	applyCLIOverrides(cfg)
 	return cfg, nil
+}
+
+func applyCLIOverrides(cfg *configpkg.Config) {
+	if repoPathOverride != "" {
+		cfg.RepoPath = repoPathOverride
+	}
+	if outputDirOverride != "" {
+		cfg.OutputDir = outputDirOverride
+	}
+	if artifactsDirOverride != "" {
+		cfg.ArtifactsDir = artifactsDirOverride
+	}
 }
 
 func runWithConfig(action func(cmd *cobra.Command, cfg *configpkg.Config) error) func(cmd *cobra.Command, args []string) error {
