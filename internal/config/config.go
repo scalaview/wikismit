@@ -21,13 +21,14 @@ type Config struct {
 }
 
 type LLMConfig struct {
-	BaseURL        string  `yaml:"base_url"`
-	APIKeyEnv      string  `yaml:"api_key_env"`
-	PlannerModel   string  `yaml:"planner_model"`
-	AgentModel     string  `yaml:"agent_model"`
-	MaxTokens      int     `yaml:"max_tokens"`
-	Temperature    float32 `yaml:"temperature"`
-	TimeoutSeconds int     `yaml:"timeout_seconds"`
+	BaseURL           string  `yaml:"base_url"`
+	APIKeyEnv         string  `yaml:"api_key_env"`
+	PlannerModel      string  `yaml:"planner_model"`
+	PreprocessorModel string  `yaml:"preprocessor_model"`
+	AgentModel        string  `yaml:"agent_model"`
+	MaxTokens         int     `yaml:"max_tokens"`
+	Temperature       float32 `yaml:"temperature"`
+	TimeoutSeconds    int     `yaml:"timeout_seconds"`
 
 	resolvedAPIKey string
 }
@@ -60,12 +61,13 @@ func defaultConfig() Config {
 		OutputDir:    "./docs",
 		ArtifactsDir: "./artifacts",
 		LLM: LLMConfig{
-			BaseURL:        "https://api.openai.com/v1",
-			PlannerModel:   "gpt-4o-mini",
-			AgentModel:     "gpt-4o",
-			MaxTokens:      4096,
-			Temperature:    0.2,
-			TimeoutSeconds: 120,
+			BaseURL:           "https://api.openai.com/v1",
+			PlannerModel:      "gpt-4o-mini",
+			PreprocessorModel: "gpt-4o-mini",
+			AgentModel:        "gpt-4o",
+			MaxTokens:         4096,
+			Temperature:       0.2,
+			TimeoutSeconds:    120,
 		},
 		Analysis: AnalysisConfig{
 			Languages: []string{"go", "python", "typescript", "rust", "java"},
@@ -106,6 +108,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.LLM.PlannerModel == "" {
 		cfg.LLM.PlannerModel = defaults.LLM.PlannerModel
+	}
+	if cfg.LLM.PreprocessorModel == "" {
+		cfg.LLM.PreprocessorModel = cfg.LLM.PlannerModel
 	}
 	if cfg.LLM.AgentModel == "" {
 		cfg.LLM.AgentModel = defaults.LLM.AgentModel

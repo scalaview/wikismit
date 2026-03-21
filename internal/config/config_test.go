@@ -166,6 +166,31 @@ cache:
 	}
 }
 
+func TestLoadConfigReadsPreprocessorModel(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  planner_model: "planner-model"
+  preprocessor_model: "preprocessor-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.LLM.PreprocessorModel != "preprocessor-model" {
+		t.Fatalf("PreprocessorModel = %q, want preprocessor-model", cfg.LLM.PreprocessorModel)
+	}
+}
+
 func TestValidateRejectsMissingRepoPath(t *testing.T) {
 	cfg := &Config{
 		RepoPath: filepath.Join(t.TempDir(), "missing"),
