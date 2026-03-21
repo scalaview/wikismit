@@ -58,6 +58,7 @@ func TestBuildPlannerPromptIncludesRulesThresholdAndSkeleton(t *testing.T) {
 		"You are a software architect.",
 		"3+ modules",
 		"Respond ONLY with valid JSON.",
+		"referenced_by",
 		skeleton,
 	} {
 		if !strings.Contains(got, want) {

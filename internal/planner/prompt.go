@@ -11,7 +11,7 @@ Rules:
 - Shared modules must have owner: "shared_preprocessor".
 - Respond ONLY with valid JSON. No preamble.
 
-Schema: { modules: [{ id, files[], shared, owner, depends_on_shared[] }] }
+Schema: { modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[] }] }
 
 Skeleton:
 %s`, threshold, skeleton)
