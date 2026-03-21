@@ -1,9 +1,14 @@
 package preprocessor
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 
+	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/planner"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -101,4 +106,47 @@ func topoSort(graph map[string][]string) ([]string, error) {
 	}
 
 	return ordered, nil
+}
+
+func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	sharedGraph := sharedSubgraph(plan, graph)
+	order, err := topoSort(sharedGraph)
+	if err != nil {
+		return nil, err
+	}
+	if len(order) == 0 {
+		return store.SharedContext{}, nil
+	}
+
+	moduleFiles := make(map[string][]string, len(plan.Modules))
+	for _, module := range plan.Modules {
+		moduleFiles[module.ID] = append([]string(nil), module.Files...)
+	}
+
+	sharedCtx := make(store.SharedContext, len(order))
+	for _, moduleID := range order {
+		files := moduleFiles[moduleID]
+		skeleton := planner.BuildSkeleton(files, idx, cfg.Agent.SkeletonMaxTokens)
+		prompt := buildSharedPrompt(moduleID, skeleton, sharedCtx)
+		response, err := client.Complete(ctx, llm.CompletionRequest{
+			Model:       cfg.LLM.PlannerModel,
+			UserMsg:     prompt,
+			MaxTokens:   cfg.LLM.MaxTokens,
+			Temperature: cfg.LLM.Temperature,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		var summary store.SharedSummary
+		if err := json.Unmarshal([]byte(response), &summary); err != nil {
+			return nil, err
+		}
+		sharedCtx[moduleID] = groundSharedSummaryRefs(summary, files, idx)
+	}
+
+	if err := store.WriteSharedContext(cfg.ArtifactsDir, sharedCtx); err != nil {
+		return nil, err
+	}
+	return sharedCtx, nil
 }
