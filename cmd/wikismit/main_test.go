@@ -45,12 +45,14 @@ func TestRootHelpListsRequiredSubcommands(t *testing.T) {
 	}
 }
 
-func TestGenerateLoadsConfigAndPrintsResolvedConfig(t *testing.T) {
-	repoDir := t.TempDir()
+func TestGenerateCommandRunsPhase1WithRepoOverride(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
 	t.Setenv("OPENAI_API_KEY", "secret-token")
 
 	configPath := writeCLIConfig(t, `
-repo_path: "`+repoDir+`"
+repo_path: "."
+artifacts_dir: "./artifacts"
 llm:
   api_key_env: "OPENAI_API_KEY"
 analysis:
@@ -59,27 +61,32 @@ agent:
   concurrency: 4
 `)
 
-	stdout, stderr, err := executeCLI(t, "generate", "--config", configPath)
+	stdout, stderr, err := executeCLI(
+		t,
+		"generate",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v, stderr = %s", err, stderr)
 	}
-	if !strings.Contains(stdout, "repo_path") {
-		t.Fatalf("generate output missing repo_path:\n%s", stdout)
+	if stdout != "" {
+		t.Fatalf("generate stdout = %q, want empty output", stdout)
 	}
-	if !strings.Contains(stdout, repoDir) {
-		t.Fatalf("generate output missing repo path %q:\n%s", repoDir, stdout)
+	if _, err := os.Stat(filepath.Join(artifactsDir, "file_index.json")); err != nil {
+		t.Fatalf("file_index.json missing: %v", err)
 	}
-	if !strings.Contains(stdout, "api_key_env") {
-		t.Fatalf("generate output missing api_key_env:\n%s", stdout)
+	if _, err := os.Stat(filepath.Join(artifactsDir, "dep_graph.json")); err != nil {
+		t.Fatalf("dep_graph.json missing: %v", err)
 	}
 }
 
-func TestStubCommandPrintsNotImplementedAfterConfigBootstrap(t *testing.T) {
-	repoDir := t.TempDir()
+func TestRootCommandExposesPhase1OverrideFlags(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "secret-token")
 
 	configPath := writeCLIConfig(t, `
-repo_path: "`+repoDir+`"
+repo_path: "."
 llm:
   api_key_env: "OPENAI_API_KEY"
 analysis:
@@ -88,12 +95,14 @@ agent:
   concurrency: 4
 `)
 
-	stdout, stderr, err := executeCLI(t, "update", "--config", configPath)
+	stdout, stderr, err := executeCLI(t, "generate", "--config", configPath, "--help")
 	if err != nil {
 		t.Fatalf("Execute() error = %v, stderr = %s", err, stderr)
 	}
-	if !strings.Contains(stdout, "not implemented") {
-		t.Fatalf("update output = %q, want not implemented", stdout)
+	for _, flag := range []string{"--repo", "--output", "--artifacts"} {
+		if !strings.Contains(stdout, flag) {
+			t.Fatalf("generate help missing %q:\n%s", flag, stdout)
+		}
 	}
 }
 
