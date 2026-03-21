@@ -109,6 +109,11 @@ func topoSort(graph map[string][]string) ([]string, error) {
 }
 
 func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	model := cfg.LLM.PreprocessorModel
+	if model == "" {
+		model = cfg.LLM.PlannerModel
+	}
+
 	sharedGraph := sharedSubgraph(plan, graph)
 	order, err := topoSort(sharedGraph)
 	if err != nil {
@@ -129,7 +134,7 @@ func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileInd
 		skeleton := planner.BuildSkeleton(files, idx, cfg.Agent.SkeletonMaxTokens)
 		prompt := buildSharedPrompt(moduleID, skeleton, sharedCtx)
 		response, err := client.Complete(ctx, llm.CompletionRequest{
-			Model:       cfg.LLM.PlannerModel,
+			Model:       model,
 			UserMsg:     prompt,
 			MaxTokens:   cfg.LLM.MaxTokens,
 			Temperature: cfg.LLM.Temperature,

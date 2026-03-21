@@ -223,3 +223,50 @@ func TestRunPreprocessorReturnsErrorOnInvalidSharedSummaryJSON(t *testing.T) {
 		t.Fatalf("shared_context.json stat error = %v, want not exist", statErr)
 	}
 }
+
+func TestRunPreprocessorUsesConfiguredPreprocessorModel(t *testing.T) {
+	cfg := samplePreprocessorConfig(t)
+	cfg.LLM.PlannerModel = "planner-model"
+	cfg.LLM.PreprocessorModel = "preprocessor-model"
+	client := llm.NewMockClient(
+		`{"summary":"Shared error helpers.","key_types":["Error"],"key_functions":[{"name":"Wrap","signature":"func Wrap(err error) error","ref":"wrong.go#L1"}]}`,
+		`{"summary":"Structured logger built on shared errors.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L2"}]}`,
+	)
+
+	_, err := RunPreprocessor(context.Background(), samplePreprocessorPlan(), samplePreprocessorIndex(), samplePreprocessorGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPreprocessor() error = %v", err)
+	}
+	calls := client.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("len(MockClient.Calls()) = %d, want 2", len(calls))
+	}
+	for _, call := range calls {
+		if call.Model != "preprocessor-model" {
+			t.Fatalf("CompletionRequest.Model = %q, want preprocessor-model", call.Model)
+		}
+	}
+}
+
+func TestRunPreprocessorFallsBackToPlannerModel(t *testing.T) {
+	cfg := samplePreprocessorConfig(t)
+	cfg.LLM.PlannerModel = "planner-model"
+	client := llm.NewMockClient(
+		`{"summary":"Shared error helpers.","key_types":["Error"],"key_functions":[{"name":"Wrap","signature":"func Wrap(err error) error","ref":"wrong.go#L1"}]}`,
+		`{"summary":"Structured logger built on shared errors.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L2"}]}`,
+	)
+
+	_, err := RunPreprocessor(context.Background(), samplePreprocessorPlan(), samplePreprocessorIndex(), samplePreprocessorGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPreprocessor() error = %v", err)
+	}
+	calls := client.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("len(MockClient.Calls()) = %d, want 2", len(calls))
+	}
+	for _, call := range calls {
+		if call.Model != "planner-model" {
+			t.Fatalf("CompletionRequest.Model = %q, want planner-model", call.Model)
+		}
+	}
+}
