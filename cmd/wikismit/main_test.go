@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/scalaview/wikismit/internal/llm"
 )
 
 func writeCLIConfig(t *testing.T, body string) string {
@@ -113,5 +115,89 @@ func TestGeneratePrintsConfigErrorsToStderr(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "read config") {
 		t.Fatalf("stderr = %q, want config read error", stderr)
+	}
+}
+
+func TestPlanCommandWritesNavPlanArtifact(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	originalFactory := plannerClientFactory
+	plannerClientFactory = func() llm.Client {
+		return llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/middleware.go"],"shared":false,"owner":"agent"},{"id":"api","files":["internal/api/handler.go"],"shared":false,"owner":"agent"},{"id":"db","files":["internal/db/client.go"],"shared":false,"owner":"agent"},{"id":"cmd","files":["cmd/main.go"],"shared":false,"owner":"agent"},{"id":"errors","files":["pkg/errors/errors.go"],"shared":true,"owner":"shared_preprocessor"},{"id":"logger","files":["pkg/logger/logger.go"],"shared":true,"owner":"shared_preprocessor"}]}`)
+	}
+	t.Cleanup(func() { plannerClientFactory = originalFactory })
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  planner_model: "planner-test-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+  skeleton_max_tokens: 3000
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"plan",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stderr = %s", err, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "nav_plan.json")); err != nil {
+		t.Fatalf("nav_plan.json missing: %v", err)
+	}
+	if !strings.Contains(stdout, "nav_plan.json written to") {
+		t.Fatalf("plan stdout = %q, want nav_plan output", stdout)
+	}
+}
+
+func TestPlanCommandReportsNavPlanLocation(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	originalFactory := plannerClientFactory
+	plannerClientFactory = func() llm.Client {
+		return llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/middleware.go"],"shared":false,"owner":"agent"},{"id":"api","files":["internal/api/handler.go"],"shared":false,"owner":"agent"},{"id":"db","files":["internal/db/client.go"],"shared":false,"owner":"agent"},{"id":"cmd","files":["cmd/main.go"],"shared":false,"owner":"agent"},{"id":"errors","files":["pkg/errors/errors.go"],"shared":true,"owner":"shared_preprocessor"},{"id":"logger","files":["pkg/logger/logger.go"],"shared":true,"owner":"shared_preprocessor"}]}`)
+	}
+	t.Cleanup(func() { plannerClientFactory = originalFactory })
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  planner_model: "planner-test-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+  skeleton_max_tokens: 3000
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"plan",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stderr = %s", err, stderr)
+	}
+	if !strings.Contains(stdout, artifactsDir) {
+		t.Fatalf("plan stdout = %q, want artifact dir %q", stdout, artifactsDir)
+	}
+	if strings.Contains(stdout, "not implemented") {
+		t.Fatalf("plan stdout = %q, still using stub output", stdout)
 	}
 }

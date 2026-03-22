@@ -6,6 +6,7 @@ llm:
   base_url: "https://open.bigmodel.cn/api/paas/v4"
   api_key_env: "OPENAI_API_KEY"
   planner_model: "glm-4.7-flashx"
+  preprocessor_model: "glm-4.7-flashx"
   agent_model: "glm-4.7-flashx"
   max_tokens: 200000
   temperature: 0.2
