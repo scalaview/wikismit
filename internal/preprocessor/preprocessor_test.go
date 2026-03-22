@@ -101,6 +101,74 @@ func TestGroundSharedSummaryRefsKeepsUnknownRefAndWarns(t *testing.T) {
 	}
 }
 
+func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/alpha/new.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New() Alpha",
+				LineStart: 7,
+				Exported:  true,
+			}},
+		},
+		"pkg/zeta/new.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New(cfg Config) Zeta",
+				LineStart: 21,
+				Exported:  true,
+			}},
+		},
+	}
+	summary := store.SharedSummary{
+		KeyFunctions: []store.KeyFunction{{
+			Name:      "New",
+			Signature: "func New(cfg Config) Zeta",
+			Ref:       "wrong.go#L1",
+		}},
+	}
+
+	got := groundSharedSummaryRefs(summary, []string{"pkg/alpha/new.go", "pkg/zeta/new.go"}, idx)
+
+	if got.KeyFunctions[0].Ref != "pkg/zeta/new.go#L21" {
+		t.Fatalf("groundSharedSummaryRefs() ref = %q, want pkg/zeta/new.go#L21", got.KeyFunctions[0].Ref)
+	}
+}
+
+func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/alpha/new.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New() Alpha",
+				LineStart: 7,
+				Exported:  true,
+			}},
+		},
+		"pkg/zeta/new.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New() Zeta",
+				LineStart: 21,
+				Exported:  true,
+			}},
+		},
+	}
+	summary := store.SharedSummary{
+		KeyFunctions: []store.KeyFunction{{
+			Name:      "New",
+			Signature: "",
+			Ref:       "wrong.go#L1",
+		}},
+	}
+
+	got := groundSharedSummaryRefs(summary, []string{"pkg/zeta/new.go", "pkg/alpha/new.go"}, idx)
+
+	if got.KeyFunctions[0].Ref != "pkg/alpha/new.go#L7" {
+		t.Fatalf("groundSharedSummaryRefs() ref = %q, want deterministic sorted fallback pkg/alpha/new.go#L7", got.KeyFunctions[0].Ref)
+	}
+}
+
 func samplePreprocessorConfig(t *testing.T) *configpkg.Config {
 	t.Helper()
 	return &configpkg.Config{
@@ -192,6 +260,75 @@ func TestRunPreprocessorWritesSharedContextInTopologicalOrder(t *testing.T) {
 	}
 	if !strings.Contains(calls[1].UserMsg, "- errors: Shared error helpers.") {
 		t.Fatalf("second prompt missing dependency summary:\n%s", calls[1].UserMsg)
+	}
+}
+
+func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
+	cfg := samplePreprocessorConfig(t)
+	idx := store.FileIndex{
+		"pkg/errors/errors.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "Wrap",
+				Signature: "func Wrap(err error) error",
+				LineStart: 11,
+				Exported:  true,
+			}},
+		},
+		"pkg/logger/logger.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New() Logger",
+				LineStart: 18,
+				Exported:  true,
+			}},
+		},
+		"pkg/config/config.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "Load",
+				Signature: "func Load(path string) Config",
+				LineStart: 25,
+				Exported:  true,
+			}},
+		},
+	}
+	plan := &store.NavPlan{
+		Modules: []store.Module{
+			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
+			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
+			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},
+		},
+	}
+	graph := store.DepGraph{
+		"pkg/errors/errors.go": {},
+		"pkg/logger/logger.go": {"pkg/errors/errors.go"},
+		"pkg/config/config.go": {"pkg/logger/logger.go"},
+	}
+	client := llm.NewMockClient(
+		`{"summary":"Error handling primitives.","key_types":["WrapError"],"key_functions":[{"name":"Wrap","signature":"func Wrap(err error) error","ref":"wrong.go#L1"}]}`,
+		`{"summary":"Structured logger.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L2"}]}`,
+		`{"summary":"Configuration management.","key_types":["Config"],"key_functions":[{"name":"Load","signature":"func Load(path string) Config","ref":"wrong.go#L3"}]}`,
+	)
+
+	_, err := RunPreprocessor(context.Background(), plan, idx, graph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunPreprocessor() error = %v", err)
+	}
+
+	calls := client.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("len(MockClient.Calls()) = %d, want 3", len(calls))
+	}
+	if strings.Contains(calls[0].UserMsg, "The following shared modules are used by this module.") {
+		t.Fatalf("errors prompt unexpectedly contained dependency block:\n%s", calls[0].UserMsg)
+	}
+	if !strings.Contains(calls[1].UserMsg, "- errors: Error handling primitives.") {
+		t.Fatalf("logger prompt missing direct dependency summary:\n%s", calls[1].UserMsg)
+	}
+	if !strings.Contains(calls[2].UserMsg, "- logger: Structured logger.") {
+		t.Fatalf("config prompt missing direct dependency summary:\n%s", calls[2].UserMsg)
+	}
+	if strings.Contains(calls[2].UserMsg, "- errors: Error handling primitives.") {
+		t.Fatalf("config prompt incorrectly contained transitive dependency summary:\n%s", calls[2].UserMsg)
 	}
 }
 

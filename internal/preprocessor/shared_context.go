@@ -13,17 +13,22 @@ var sharedLogger logpkg.Logger = logpkg.New(false)
 func groundSharedSummaryRefs(summary store.SharedSummary, moduleFiles []string, idx store.FileIndex) store.SharedSummary {
 	grounded := summary
 	grounded.KeyFunctions = append([]store.KeyFunction(nil), summary.KeyFunctions...)
+	sortedFiles := append([]string(nil), moduleFiles...)
+	sort.Strings(sortedFiles)
 
 	sourceRefs := make([]string, 0, len(grounded.KeyFunctions))
 	for i, keyFn := range grounded.KeyFunctions {
 		ref := keyFn.Ref
-		for _, file := range moduleFiles {
+		for _, file := range sortedFiles {
 			entry, ok := idx[file]
 			if !ok {
 				continue
 			}
 			for _, fn := range entry.Functions {
 				if fn.Name != keyFn.Name {
+					continue
+				}
+				if keyFn.Signature != "" && fn.Signature != keyFn.Signature {
 					continue
 				}
 				ref = file + "#L" + strconv.Itoa(fn.LineStart)

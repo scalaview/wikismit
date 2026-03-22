@@ -132,7 +132,13 @@ func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileInd
 	for _, moduleID := range order {
 		files := moduleFiles[moduleID]
 		skeleton := planner.BuildSkeleton(files, idx, cfg.Agent.SkeletonMaxTokens)
-		prompt := buildSharedPrompt(moduleID, skeleton, sharedCtx)
+		directDeps := make(store.SharedContext, len(sharedGraph[moduleID]))
+		for _, dependencyID := range sharedGraph[moduleID] {
+			if summary, ok := sharedCtx[dependencyID]; ok {
+				directDeps[dependencyID] = summary
+			}
+		}
+		prompt := buildSharedPrompt(moduleID, skeleton, directDeps)
 		response, err := client.Complete(ctx, llm.CompletionRequest{
 			Model:       model,
 			UserMsg:     prompt,
