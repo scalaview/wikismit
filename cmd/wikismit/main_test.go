@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func writeCLIConfig(t *testing.T, body string) string {
@@ -52,6 +55,24 @@ func TestGenerateCommandRunsPhase1WithRepoOverride(t *testing.T) {
 	artifactsDir := t.TempDir()
 	t.Setenv("OPENAI_API_KEY", "secret-token")
 
+	originalFactory := agentClientFactory
+	agentClientFactory = func() llm.Client {
+		return llm.NewMockClient("# Auth module")
+	}
+	t.Cleanup(func() { agentClientFactory = originalFactory })
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{
+		"logger": {Summary: "Shared logger helpers."},
+	}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
 	configPath := writeCLIConfig(t, `
 repo_path: "."
 artifacts_dir: "./artifacts"
@@ -81,6 +102,9 @@ agent:
 	}
 	if _, err := os.Stat(filepath.Join(artifactsDir, "dep_graph.json")); err != nil {
 		t.Fatalf("dep_graph.json missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "module_docs", "auth.md")); err != nil {
+		t.Fatalf("auth module doc missing: %v", err)
 	}
 }
 
@@ -115,6 +139,142 @@ func TestGeneratePrintsConfigErrorsToStderr(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "read config") {
 		t.Fatalf("stderr = %q, want config read error", stderr)
+	}
+}
+
+func sampleGenerateConfig(repoDir, artifactsDir string) *configpkg.Config {
+	return &configpkg.Config{
+		RepoPath:     repoDir,
+		ArtifactsDir: artifactsDir,
+		Analysis: configpkg.AnalysisConfig{
+			SharedModuleThreshold: 3,
+		},
+		Agent: configpkg.AgentConfig{
+			Concurrency:       2,
+			SkeletonMaxTokens: 3000,
+		},
+		LLM: configpkg.LLMConfig{
+			AgentModel: "agent-test-model",
+			MaxTokens:  2048,
+		},
+	}
+}
+
+func TestGenerateCommandRunsPhase4ForNonSharedModules(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	cfg := sampleGenerateConfig(repoDir, artifactsDir)
+	client := llm.NewMockClient("# Auth doc", "# API doc")
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent"},
+		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{
+		"logger": {Summary: "Shared logger helpers."},
+	}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
+	if err := runGenerate(newGenerateCmd(), cfg, client); err != nil {
+		t.Fatalf("runGenerate() error = %v", err)
+	}
+
+	for _, moduleID := range []string{"auth", "api"} {
+		path := filepath.Join(artifactsDir, "module_docs", moduleID+".md")
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("os.Stat(%q) error = %v, want generated module doc", path, err)
+		}
+	}
+	if client.CallCount() != 2 {
+		t.Fatalf("MockClient.CallCount() = %d, want 2", client.CallCount())
+	}
+}
+
+func TestGenerateCommandSkipsSharedModulesDuringPhase4Fanout(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	cfg := sampleGenerateConfig(repoDir, artifactsDir)
+	client := llm.NewMockClient("# Auth doc")
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{
+		"logger": {Summary: "Shared logger helpers."},
+	}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
+	if err := runGenerate(newGenerateCmd(), cfg, client); err != nil {
+		t.Fatalf("runGenerate() error = %v", err)
+	}
+
+	if client.CallCount() != 1 {
+		t.Fatalf("MockClient.CallCount() = %d, want 1", client.CallCount())
+	}
+	sharedPath := filepath.Join(artifactsDir, "module_docs", "logger.md")
+	if _, err := os.Stat(sharedPath); !os.IsNotExist(err) {
+		t.Fatalf("os.Stat(%q) error = %v, want not-exist", sharedPath, err)
+	}
+}
+
+func TestGenerateCommandReportsPhase4SummaryToStderr(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 2
+  skeleton_max_tokens: 3000
+`)
+
+	originalFactory := agentClientFactory
+	agentClientFactory = func() llm.Client {
+		return llm.NewMockClient("# Auth module").WithErrors(nil, errors.New("boom"))
+	}
+	t.Cleanup(func() { agentClientFactory = originalFactory })
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "billing", Files: []string{"internal/api/handler.go"}, Owner: "agent"},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{
+		"logger": {Summary: "Shared logger helpers."},
+	}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"generate",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+	)
+	if err == nil {
+		t.Fatalf("Execute() error = nil, stdout = %s, stderr = %s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "Phase 4 complete:") {
+		t.Fatalf("stderr = %q, want phase 4 summary", stderr)
+	}
+	if !strings.Contains(stderr, "billing") {
+		t.Fatalf("stderr = %q, want failing module in summary", stderr)
 	}
 }
 
