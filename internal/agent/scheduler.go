@@ -9,10 +9,44 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
 type moduleRunner func(context.Context, store.Module, AgentInput) ModuleDoc
+
+type Phase4Error struct {
+	Total    int
+	Failures []ModuleDoc
+}
+
+func (e *Phase4Error) Error() string {
+	if e == nil || len(e.Failures) == 0 {
+		return ""
+	}
+
+	moduleIDs := make([]string, 0, len(e.Failures))
+	for _, failure := range e.Failures {
+		moduleIDs = append(moduleIDs, failure.ModuleID)
+	}
+	sort.Strings(moduleIDs)
+
+	joined := strings.Join(moduleIDs, ", ")
+	return fmt.Sprintf("Phase 4 completed with %d failures: [%s]", len(e.Failures), joined)
+}
+
+func (e *Phase4Error) Summary() string {
+	if e == nil {
+		return ""
+	}
+	return formatPhase4Summary(e.Total, e.Failures)
+}
+
+func Run(ctx context.Context, modules []store.Module, input AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	return runScheduler(ctx, modules, input, concurrency, func(ctx context.Context, module store.Module, input AgentInput) ModuleDoc {
+		return runAgent(ctx, module, input, client)
+	}, artifactsDir)
+}
 
 func runScheduler(ctx context.Context, modules []store.Module, input AgentInput, concurrency int, runner moduleRunner, artifactsDir string) error {
 	if concurrency < 1 {
@@ -45,7 +79,7 @@ func runScheduler(ctx context.Context, modules []store.Module, input AgentInput,
 		return err
 	}
 	if len(failures) > 0 {
-		return formatSchedulerFailure(failures)
+		return formatSchedulerFailure(len(modules), failures)
 	}
 
 	wg.Wait()
@@ -74,17 +108,11 @@ func collectResults(results <-chan ModuleDoc, artifactsDir string) ([]ModuleDoc,
 	return failures, nil
 }
 
-func formatSchedulerFailure(failures []ModuleDoc) error {
+func formatSchedulerFailure(total int, failures []ModuleDoc) error {
 	if len(failures) == 0 {
 		return nil
 	}
 
-	moduleIDs := make([]string, 0, len(failures))
-	for _, failure := range failures {
-		moduleIDs = append(moduleIDs, failure.ModuleID)
-	}
-	sort.Strings(moduleIDs)
-
-	joined := strings.Join(moduleIDs, ", ")
-	return fmt.Errorf("Phase 4 completed with %d failures: [%s]", len(failures), joined)
+	cloned := append([]ModuleDoc(nil), failures...)
+	return &Phase4Error{Total: total, Failures: cloned}
 }
