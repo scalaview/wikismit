@@ -169,6 +169,72 @@ func TestRunPlannerRejectsInvalidOwnerValue(t *testing.T) {
 	}
 }
 
+func TestRunPlannerRejectsEmptyModuleID(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
+	)
+
+	_, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err == nil {
+		t.Fatal("RunPlanner() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "empty module id") {
+		t.Fatalf("RunPlanner() error = %v, want empty module id context", err)
+	}
+}
+
+func TestRunPlannerRejectsDuplicateModuleIDs(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	idx := store.FileIndex{
+		"internal/auth/jwt.go": samplePlannerIndex()["internal/auth/jwt.go"],
+		"internal/auth/session.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "StartSession",
+				Signature: "func StartSession() string",
+				LineStart: 12,
+				Exported:  true,
+			}},
+		},
+	}
+	graph := store.DepGraph{
+		"internal/auth/jwt.go":     {},
+		"internal/auth/session.go": {},
+	}
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"},{"id":"auth","files":["internal/auth/session.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"},{"id":"auth","files":["internal/auth/session.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"},{"id":"auth","files":["internal/auth/session.go"],"shared":false,"owner":"agent"}]}`,
+	)
+
+	_, err := RunPlanner(context.Background(), idx, graph, cfg, client)
+	if err == nil {
+		t.Fatal("RunPlanner() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "duplicate module id") {
+		t.Fatalf("RunPlanner() error = %v, want duplicate module id context", err)
+	}
+}
+
+func TestRunPlannerRejectsFilesMissingFromIndex(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/missing.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/missing.go"],"shared":false,"owner":"agent"}]}`,
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/missing.go"],"shared":false,"owner":"agent"}]}`,
+	)
+
+	_, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err == nil {
+		t.Fatal("RunPlanner() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "not found in file index") {
+		t.Fatalf("RunPlanner() error = %v, want missing file index context", err)
+	}
+}
+
 func TestRunPlannerSetsGeneratedAtOnSuccess(t *testing.T) {
 	cfg := samplePlannerConfig(t)
 	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)

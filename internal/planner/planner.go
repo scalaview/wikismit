@@ -50,11 +50,22 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 
 func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 	seen := make(map[string]string, len(idx))
+	seenModuleIDs := make(map[string]struct{}, len(plan.Modules))
 	for _, module := range plan.Modules {
+		if module.ID == "" {
+			return fmt.Errorf("empty module id")
+		}
+		if _, exists := seenModuleIDs[module.ID]; exists {
+			return fmt.Errorf("duplicate module id %q", module.ID)
+		}
+		seenModuleIDs[module.ID] = struct{}{}
 		if module.Owner != "agent" && module.Owner != "shared_preprocessor" {
 			return fmt.Errorf("invalid owner %q for module %q", module.Owner, module.ID)
 		}
 		for _, file := range module.Files {
+			if _, ok := idx[file]; !ok {
+				return fmt.Errorf("file %q in module %q not found in file index", file, module.ID)
+			}
 			if owner, exists := seen[file]; exists {
 				return fmt.Errorf("duplicate file assignment for %q in modules %q and %q", file, owner, module.ID)
 			}
