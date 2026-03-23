@@ -48,6 +48,20 @@ func Run(ctx context.Context, modules []store.Module, input AgentInput, client l
 	}, artifactsDir)
 }
 
+func RunFor(ctx context.Context, modules []store.Module, input AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	filtered := make([]store.Module, 0, len(modules))
+	for _, module := range modules {
+		if module.Owner != "agent" {
+			continue
+		}
+		filtered = append(filtered, module)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return Run(ctx, filtered, input, client, artifactsDir, concurrency)
+}
+
 func runScheduler(ctx context.Context, modules []store.Module, input AgentInput, concurrency int, runner moduleRunner, artifactsDir string) error {
 	if concurrency < 1 {
 		concurrency = 1

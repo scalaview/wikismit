@@ -1,0 +1,47 @@
+name: Generate and deploy docs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install wikismit
+        run: |
+          curl -sSL https://github.com/scalaview/wikismit/releases/latest/download/wikismit-linux-amd64 \
+            -o /usr/local/bin/wikismit
+          chmod +x /usr/local/bin/wikismit
+
+      - name: Generate docs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: wikismit generate --repo=. --output=./docs --artifacts=./artifacts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build VitePress site
+        run: wikismit build --output=./docs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
