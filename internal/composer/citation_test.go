@@ -1,6 +1,8 @@
 package composer
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -134,5 +136,32 @@ func TestBuildSymbolMapPrefersExportedSymbolForAmbiguousName(t *testing.T) {
 
 	if got := symbolMap["Normalize"]; got != "pkg/alpha/exported.go#L5" {
 		t.Fatalf("expected canonical exported alphabetical ref, got %q", got)
+	}
+}
+
+func TestProcessFileOverwritesMarkdownWithInjectedCitations(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "auth.md")
+	original := "Use `GenerateToken` to issue tokens."
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+
+	symbolMap := map[string]string{
+		"GenerateToken": "internal/auth/jwt.go#L24",
+	}
+
+	if err := ProcessFile(path, symbolMap); err != nil {
+		t.Fatalf("ProcessFile() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read processed file: %v", err)
+	}
+
+	expected := "Use [GenerateToken](internal/auth/jwt.go#L24) to issue tokens."
+	if got := string(data); got != expected {
+		t.Fatalf("processed file = %q, want %q", got, expected)
 	}
 }

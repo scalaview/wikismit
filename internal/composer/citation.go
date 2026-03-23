@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -66,4 +67,14 @@ func InjectCitations(content string, symbolMap map[string]string) string {
 		}
 		return match
 	})
+}
+
+func ProcessFile(path string, symbolMap map[string]string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	updated := InjectCitations(string(content), symbolMap)
+	return os.WriteFile(path, []byte(updated), 0o644)
 }
