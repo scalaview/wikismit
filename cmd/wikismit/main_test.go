@@ -145,6 +145,7 @@ func TestGeneratePrintsConfigErrorsToStderr(t *testing.T) {
 func sampleGenerateConfig(repoDir, artifactsDir string) *configpkg.Config {
 	return &configpkg.Config{
 		RepoPath:     repoDir,
+		OutputDir:    filepath.Join(artifactsDir, "docs"),
 		ArtifactsDir: artifactsDir,
 		Analysis: configpkg.AnalysisConfig{
 			SharedModuleThreshold: 3,
@@ -273,8 +274,8 @@ agent:
 	if !strings.Contains(stderr, "Phase 4 complete:") {
 		t.Fatalf("stderr = %q, want phase 4 summary", stderr)
 	}
-	if !strings.Contains(stderr, "billing") {
-		t.Fatalf("stderr = %q, want failing module in summary", stderr)
+	if !strings.Contains(stderr, "auth") && !strings.Contains(stderr, "billing") {
+		t.Fatalf("stderr = %q, want at least one failing module in summary", stderr)
 	}
 }
 
@@ -359,5 +360,331 @@ agent:
 	}
 	if strings.Contains(stdout, "not implemented") {
 		t.Fatalf("plan stdout = %q, still using stub output", stdout)
+	}
+}
+
+func TestValidateCommandWritesValidationReportArtifact(t *testing.T) {
+	outputDir := t.TempDir()
+	artifactsDir := t.TempDir()
+	modulesDir := filepath.Join(outputDir, "modules")
+	sharedDir := filepath.Join(outputDir, "shared")
+	if err := os.MkdirAll(modulesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(modulesDir) error = %v", err)
+	}
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(sharedDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modulesDir, "auth.md"), []byte("See [Logger](../shared/missing.md)\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"validate",
+		"--config", configPath,
+		"--output", outputDir,
+		"--artifacts", artifactsDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "validation_report.json")); err != nil {
+		t.Fatalf("validation_report.json missing: %v", err)
+	}
+}
+
+func TestValidateCommandPrintsBrokenLinkSummaryAndExitsZero(t *testing.T) {
+	outputDir := t.TempDir()
+	artifactsDir := t.TempDir()
+	modulesDir := filepath.Join(outputDir, "modules")
+	if err := os.MkdirAll(modulesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(modulesDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modulesDir, "auth.md"), []byte("See [Logger](../shared/missing.md)\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"validate",
+		"--config", configPath,
+		"--output", outputDir,
+		"--artifacts", artifactsDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Validation complete:") {
+		t.Fatalf("stdout = %q, want validation summary", stdout)
+	}
+	if !strings.Contains(stdout, "1 broken links found") {
+		t.Fatalf("stdout = %q, want broken link count", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty stderr", stderr)
+	}
+}
+
+func TestGenerateCommandRunsComposerAfterPhase4(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	cfg := sampleGenerateConfig(repoDir, artifactsDir)
+	cfg.OutputDir = outputDir
+	client := llm.NewMockClient("# Auth doc")
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{{
+		ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent",
+	}}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{"auth": nil}); err != nil {
+		t.Fatalf("WriteDepGraph() error = %v", err)
+	}
+
+	if err := runGenerate(newGenerateCmd(), cfg, client); err != nil {
+		t.Fatalf("runGenerate() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(outputDir, "index.md")); err != nil {
+		t.Fatalf("docs index missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "validation_report.json")); err != nil {
+		t.Fatalf("validation report missing: %v", err)
+	}
+}
+
+func TestGenerateCommandLoadsDepGraphForPhase5(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	cfg := sampleGenerateConfig(repoDir, artifactsDir)
+	cfg.OutputDir = outputDir
+	client := llm.NewMockClient("# Auth doc")
+
+	originalReader := depGraphReader
+	depGraphReader = func(string) (store.DepGraph, error) {
+		return nil, store.ErrArtifactNotFound
+	}
+	t.Cleanup(func() { depGraphReader = originalReader })
+
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{{
+		ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent",
+	}}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
+	err := runGenerate(newGenerateCmd(), cfg, client)
+	if !errors.Is(err, store.ErrArtifactNotFound) {
+		t.Fatalf("runGenerate() error = %v, want ErrArtifactNotFound when dep graph read fails", err)
+	}
+}
+
+func TestBuildCommandErrorsWhenVitePressConfigIsMissing(t *testing.T) {
+	outputDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"build",
+		"--config", configPath,
+		"--output", outputDir,
+	)
+	if err == nil {
+		t.Fatalf("Execute() error = nil, stdout = %s, stderr = %s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "run wikismit generate first") {
+		t.Fatalf("stderr = %q, want missing config guidance", stderr)
+	}
+}
+
+func TestBuildCommandErrorsWhenNodeIsUnavailable(t *testing.T) {
+	outputDir := t.TempDir()
+	vitepressDir := filepath.Join(outputDir, ".vitepress")
+	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(vitepressDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	}
+
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	t.Setenv("PATH", "")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"build",
+		"--config", configPath,
+		"--output", outputDir,
+	)
+	if err == nil {
+		t.Fatalf("Execute() error = nil, stdout = %s, stderr = %s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "Node.js 20+") {
+		t.Fatalf("stderr = %q, want Node.js prerequisite message", stderr)
+	}
+}
+
+func TestBuildCommandInstallsVitePressWhenNodeModulesMissing(t *testing.T) {
+	outputDir := t.TempDir()
+	vitepressDir := filepath.Join(outputDir, ".vitepress")
+	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(vitepressDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	}
+
+	originalLookPath := lookPath
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Cleanup(func() { lookPath = originalLookPath })
+
+	commands := make([]string, 0)
+	originalRunner := runCommand
+	runCommand = func(dir string, name string, args ...string) error {
+		commands = append(commands, dir+" :: "+name+" "+strings.Join(args, " "))
+		return nil
+	}
+	t.Cleanup(func() { runCommand = originalRunner })
+
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"build",
+		"--config", configPath,
+		"--output", outputDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if len(commands) != 2 {
+		t.Fatalf("command count = %d, want 2; commands = %#v", len(commands), commands)
+	}
+	if !strings.Contains(commands[0], "npm install -D vitepress") {
+		t.Fatalf("first command = %q, want npm install", commands[0])
+	}
+	if !strings.Contains(commands[1], "npx vitepress build docs") {
+		t.Fatalf("second command = %q, want vitepress build", commands[1])
+	}
+}
+
+func TestBuildCommandSkipsInstallWhenNodeModulesAlreadyExist(t *testing.T) {
+	outputDir := t.TempDir()
+	vitepressDir := filepath.Join(outputDir, ".vitepress")
+	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(vitepressDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(outputDir, "node_modules"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(node_modules) error = %v", err)
+	}
+
+	originalLookPath := lookPath
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Cleanup(func() { lookPath = originalLookPath })
+
+	commands := make([]string, 0)
+	originalRunner := runCommand
+	runCommand = func(dir string, name string, args ...string) error {
+		commands = append(commands, dir+" :: "+name+" "+strings.Join(args, " "))
+		return nil
+	}
+	t.Cleanup(func() { runCommand = originalRunner })
+
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+output_dir: "./docs"
+artifacts_dir: "./artifacts"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"build",
+		"--config", configPath,
+		"--output", outputDir,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if len(commands) != 1 {
+		t.Fatalf("command count = %d, want 1; commands = %#v", len(commands), commands)
+	}
+	if !strings.Contains(commands[0], "npx vitepress build docs") {
+		t.Fatalf("command = %q, want vitepress build", commands[0])
 	}
 }

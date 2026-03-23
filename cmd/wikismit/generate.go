@@ -6,6 +6,7 @@ import (
 
 	"github.com/scalaview/wikismit/internal/agent"
 	"github.com/scalaview/wikismit/internal/analyzer"
+	"github.com/scalaview/wikismit/internal/composer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/pkg/store"
@@ -15,6 +16,8 @@ import (
 var agentClientFactory = func() llm.Client {
 	return nil
 }
+
+var depGraphReader = store.ReadDepGraph
 
 func newGenerateCmd() *cobra.Command {
 	return &cobra.Command{
@@ -43,6 +46,10 @@ func runGenerate(cmd *cobra.Command, cfg *configpkg.Config, client llm.Client) e
 	if err != nil {
 		return err
 	}
+	graph, err := depGraphReader(cfg.ArtifactsDir)
+	if err != nil {
+		return err
+	}
 	plan, err := store.ReadNavPlan(cfg.ArtifactsDir)
 	if err != nil {
 		return err
@@ -67,5 +74,9 @@ func runGenerate(cmd *cobra.Command, cfg *configpkg.Config, client llm.Client) e
 	if phase4Err, ok := err.(*agent.Phase4Error); ok {
 		fmt.Fprintln(cmd.ErrOrStderr(), phase4Err.Summary())
 	}
-	return err
+	if err != nil {
+		return err
+	}
+
+	return composer.RunComposer(cfg, &plan, idx, graph)
 }

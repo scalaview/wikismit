@@ -41,3 +41,7 @@ func ReadSharedContext(dir string) (SharedContext, error) {
 	err := readJSON(filepath.Join(dir, "shared_context.json"), &shared)
 	return shared, err
 }
+
+func WriteValidationReport(dir string, report ValidationReport) error {
+	return writeJSON(filepath.Join(dir, "validation_report.json"), report)
+}
