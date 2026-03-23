@@ -1,0 +1,73 @@
+name: Update docs (incremental)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore artifacts cache
+        uses: actions/cache@v4
+        with:
+          path: artifacts/
+          key: wikismit-artifacts-${{ github.sha }}
+          restore-keys: |
+            wikismit-artifacts-
+
+      - name: Install wikismit
+        run: |
+          curl -sSL https://github.com/scalaview/wikismit/releases/latest/download/wikismit-linux-amd64 \
+            -o /usr/local/bin/wikismit
+          chmod +x /usr/local/bin/wikismit
+
+      - name: Update docs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: wikismit update --repo=. --output=./docs --artifacts=./artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-docs
+          path: docs/
+
+  deploy:
+    needs: generate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: generated-docs
+          path: docs/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build VitePress site
+        run: |
+          npm install -D vitepress
+          npx vitepress build docs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
