@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	configpkg "github.com/scalaview/wikismit/internal/config"
 	"golang.org/x/mod/modfile"
 
 	"github.com/scalaview/wikismit/pkg/store"
@@ -127,4 +128,23 @@ func BuildDepGraph(idx store.FileIndex) store.DepGraph {
 	}
 
 	return graph
+}
+
+func ResolveImportPaths(repoPath string, cfg configpkg.AnalysisConfig, idx store.FileIndex) (store.FileIndex, error) {
+	analyzer := NewAnalyzer(cfg)
+	if err := analyzer.ensureModulePath(repoPath); err != nil {
+		return nil, err
+	}
+
+	resolved := make(store.FileIndex, len(idx))
+	for path, entry := range idx {
+		entryCopy := entry
+		entryCopy.Imports = append([]store.Import(nil), entry.Imports...)
+		if err := analyzer.resolveImports(repoPath, &entryCopy); err != nil {
+			return nil, err
+		}
+		resolved[path] = entryCopy
+	}
+
+	return resolved, nil
 }

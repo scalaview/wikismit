@@ -5,9 +5,13 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func RunPhase1(cfg *configpkg.Config) error {
+func RunPhase1FileIndex(cfg *configpkg.Config) (store.FileIndex, error) {
 	analyzer := NewAnalyzer(cfg.Analysis)
-	fileIndex, err := analyzer.Analyze(cfg.RepoPath)
+	return analyzer.Analyze(cfg.RepoPath)
+}
+
+func RunPhase1(cfg *configpkg.Config) error {
+	fileIndex, err := RunPhase1FileIndex(cfg)
 	if err != nil {
 		return err
 	}
