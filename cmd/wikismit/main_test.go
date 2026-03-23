@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scalaview/wikismit/internal/analyzer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/pkg/store"
@@ -276,6 +277,257 @@ agent:
 	}
 	if !strings.Contains(stderr, "auth") && !strings.Contains(stderr, "billing") {
 		t.Fatalf("stderr = %q, want at least one failing module in summary", stderr)
+	}
+}
+
+func TestUpdateCommandExposesIncrementalFlags(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+`)
+
+	stdout, stderr, err := executeCLI(t, "update", "--config", configPath, "--help")
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stderr = %s", err, stderr)
+	}
+	for _, flag := range []string{"--base-ref", "--head-ref", "--changed-files"} {
+		if !strings.Contains(stdout, flag) {
+			t.Fatalf("update help missing %q:\n%s", flag, stdout)
+		}
+	}
+}
+
+func TestUpdateCommandFallsBackToGenerateWhenArtifactsMissing(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+output_dir: "./docs"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  planner_model: "planner-test-model"
+  agent_model: "agent-test-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 4
+  skeleton_max_tokens: 3000
+`)
+
+	originalFactory := updateClientFactory
+	updateClientFactory = func() llm.Client {
+		return llm.NewMockClient(
+			`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/middleware.go"],"shared":false,"owner":"agent","depends_on_shared":["errors","logger"]},{"id":"api","files":["internal/api/handler.go"],"shared":false,"owner":"agent","depends_on_shared":["logger"]},{"id":"db","files":["internal/db/client.go"],"shared":false,"owner":"agent","depends_on_shared":["errors","logger"]},{"id":"cmd","files":["cmd/main.go"],"shared":false,"owner":"agent"},{"id":"errors","files":["pkg/errors/errors.go"],"shared":true,"owner":"shared_preprocessor"},{"id":"logger","files":["pkg/logger/logger.go"],"shared":true,"owner":"shared_preprocessor"}]}`,
+			`{"summary":"Shared error helpers.","key_types":[],"key_functions":[]}`,
+			`{"summary":"Shared logger helpers.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() *Logger","ref":"wrong.go#L1"}]}`,
+			"# Auth doc",
+			"# API doc",
+			"# DB doc",
+			"# CMD doc",
+		)
+	}
+	t.Cleanup(func() { updateClientFactory = originalFactory })
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"update",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+		"--output", outputDir,
+		"--changed-files", "internal/auth/jwt.go",
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "full generate") {
+		t.Fatalf("stdout = %q, want fallback message", stdout)
+	}
+	for _, path := range []string{
+		filepath.Join(artifactsDir, "file_index.json"),
+		filepath.Join(artifactsDir, "nav_plan.json"),
+		filepath.Join(artifactsDir, "shared_context.json"),
+		filepath.Join(artifactsDir, "module_docs", "auth.md"),
+		filepath.Join(outputDir, "index.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected fallback artifact %q: %v", path, err)
+		}
+	}
+}
+
+func TestUpdateCommandUsesChangedFilesOverrideForSingleModuleRerun(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+output_dir: "./docs"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  agent_model: "agent-test-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 2
+  skeleton_max_tokens: 3000
+`)
+
+	if err := store.WriteFileIndex(artifactsDir, store.FileIndex{
+		"internal/auth/jwt.go":    {},
+		"internal/api/handler.go": {},
+		"pkg/logger/logger.go":    {},
+	}); err != nil {
+		t.Fatalf("WriteFileIndex() error = %v", err)
+	}
+	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{
+		"internal/auth/jwt.go":    {"pkg/logger/logger.go"},
+		"internal/api/handler.go": {"internal/auth/jwt.go", "pkg/logger/logger.go"},
+		"pkg/logger/logger.go":    {},
+	}); err != nil {
+		t.Fatalf("WriteDepGraph() error = %v", err)
+	}
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{"logger": {Summary: "Shared logger helpers."}}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(artifactsDir, "module_docs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(module_docs) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactsDir, "module_docs", "api.md"), []byte("# Existing API"), 0o644); err != nil {
+		t.Fatalf("WriteFile(api.md) error = %v", err)
+	}
+
+	originalFactory := agentClientFactory
+	agentClientFactory = func() llm.Client {
+		return llm.NewMockClient("# Auth doc")
+	}
+	t.Cleanup(func() { agentClientFactory = originalFactory })
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"update",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+		"--output", outputDir,
+		"--changed-files", "internal/auth/jwt.go",
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "module_docs", "auth.md")); err != nil {
+		t.Fatalf("auth.md missing: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(artifactsDir, "module_docs", "api.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(api.md) error = %v", err)
+	}
+	if string(data) != "# Existing API" {
+		t.Fatalf("api.md content = %q, want untouched existing doc", string(data))
+	}
+	if !strings.Contains(stdout, "Incremental update complete") {
+		t.Fatalf("stdout = %q, want completion message", stdout)
+	}
+}
+
+func TestUpdateCommandRerunsDependentsWhenSharedModuleChanges(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeCLIConfig(t, `
+repo_path: "."
+artifacts_dir: "./artifacts"
+output_dir: "./docs"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+  planner_model: "planner-test-model"
+  agent_model: "agent-test-model"
+analysis:
+  shared_module_threshold: 3
+agent:
+  concurrency: 2
+  skeleton_max_tokens: 3000
+`)
+
+	if err := analyzer.RunPhase1(&configpkg.Config{
+		RepoPath:     repoDir,
+		ArtifactsDir: artifactsDir,
+		Analysis:     configpkg.AnalysisConfig{},
+	}); err != nil {
+		t.Fatalf("RunPhase1() error = %v", err)
+	}
+	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
+		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
+	}}); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{"logger": {Summary: "stale logger summary"}}); err != nil {
+		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+
+	originalFactory := agentClientFactory
+	agentClientFactory = func() llm.Client {
+		return llm.NewMockClient(
+			`{"summary":"updated logger summary","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"pkg/logger/logger.go#L5"}]}`,
+			"# Auth doc",
+			"# API doc",
+			"# DB doc",
+		)
+	}
+	t.Cleanup(func() { agentClientFactory = originalFactory })
+
+	stdout, stderr, err := executeCLI(
+		t,
+		"update",
+		"--config", configPath,
+		"--repo", repoDir,
+		"--artifacts", artifactsDir,
+		"--output", outputDir,
+		"--changed-files", "pkg/logger/logger.go",
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v, stdout = %s, stderr = %s", err, stdout, stderr)
+	}
+	sharedCtx, err := store.ReadSharedContext(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadSharedContext() error = %v", err)
+	}
+	if sharedCtx["logger"].Summary != "updated logger summary" {
+		t.Fatalf("logger summary = %q, want updated summary", sharedCtx["logger"].Summary)
+	}
+	for _, moduleID := range []string{"auth", "api", "db"} {
+		if _, err := os.Stat(filepath.Join(artifactsDir, "module_docs", moduleID+".md")); err != nil {
+			t.Fatalf("%s.md missing: %v", moduleID, err)
+		}
+	}
+	if !strings.Contains(stdout, "Incremental update complete") {
+		t.Fatalf("stdout = %q, want completion message", stdout)
 	}
 }
 
