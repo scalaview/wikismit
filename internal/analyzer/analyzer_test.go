@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -62,18 +63,13 @@ func TestAnalyzeIndexesAllGoFilesInSampleRepo(t *testing.T) {
 }
 
 func TestAnalyzeSkipsFilesMatchingExcludePatterns(t *testing.T) {
-	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
+	repoPath := copySampleRepo(t)
 	testFilePath := filepath.Join(repoPath, "internal", "auth", "jwt_test.go")
 	vendorFilePath := filepath.Join(repoPath, "vendor", "example", "vendor.go")
 
 	if err := os.MkdirAll(filepath.Dir(vendorFilePath), 0o755); err != nil {
 		t.Fatalf("MkdirAll(vendor) error = %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Remove(testFilePath)
-		_ = os.RemoveAll(filepath.Join(repoPath, "vendor"))
-	})
-
 	if err := os.WriteFile(testFilePath, []byte("package auth\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(jwt_test.go) error = %v", err)
 	}
@@ -99,15 +95,12 @@ func TestAnalyzeSkipsFilesMatchingExcludePatterns(t *testing.T) {
 }
 
 func TestAnalyzeSkipsUnknownExtensionsSilently(t *testing.T) {
-	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
+	repoPath := copySampleRepo(t)
 	pythonFilePath := filepath.Join(repoPath, "scripts", "helper.py")
 
 	if err := os.MkdirAll(filepath.Dir(pythonFilePath), 0o755); err != nil {
 		t.Fatalf("MkdirAll(scripts) error = %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(filepath.Join(repoPath, "scripts"))
-	})
 
 	if err := os.WriteFile(pythonFilePath, []byte("print('hello')\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(helper.py) error = %v", err)
@@ -123,6 +116,48 @@ func TestAnalyzeSkipsUnknownExtensionsSilently(t *testing.T) {
 	if _, ok := idx["scripts/helper.py"]; ok {
 		t.Fatal("FileIndex unexpectedly contains unsupported Python file")
 	}
+}
+
+func copySampleRepo(t *testing.T) string {
+	t.Helper()
+
+	src := filepath.Join("..", "..", "testdata", "sample_repo")
+	dst := t.TempDir()
+	if err := copyDir(src, dst); err != nil {
+		t.Fatalf("copyDir(sample_repo) error = %v", err)
+	}
+	return dst
+}
+
+func copyDir(src string, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+
+		_, err = io.Copy(out, in)
+		return err
+	})
 }
 
 func TestAnalyzeWarnsAndContinuesOnParseError(t *testing.T) {
