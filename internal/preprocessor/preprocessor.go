@@ -109,6 +109,21 @@ func topoSort(graph map[string][]string) ([]string, error) {
 }
 
 func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	return runPreprocessor(ctx, nil, plan, idx, graph, cfg, client)
+}
+
+func RunPreprocessorFor(ctx context.Context, affected []store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	affectedSet := make(map[string]bool, len(affected))
+	for _, module := range affected {
+		if module.Owner != "shared_preprocessor" && !module.Shared {
+			continue
+		}
+		affectedSet[module.ID] = true
+	}
+	return runPreprocessor(ctx, affectedSet, plan, idx, graph, cfg, client)
+}
+
+func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
 	model := cfg.LLM.PreprocessorModel
 	if model == "" {
 		model = cfg.LLM.PlannerModel
@@ -128,8 +143,26 @@ func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileInd
 		moduleFiles[module.ID] = append([]string(nil), module.Files...)
 	}
 
+	existing := store.SharedContext{}
+	if affectedSet != nil {
+		loaded, err := store.ReadSharedContext(cfg.ArtifactsDir)
+		if err != nil && err != store.ErrArtifactNotFound {
+			return nil, err
+		}
+		if err == nil {
+			existing = loaded
+		}
+	}
+
 	sharedCtx := make(store.SharedContext, len(order))
 	for _, moduleID := range order {
+		if affectedSet != nil && !affectedSet[moduleID] {
+			if summary, ok := existing[moduleID]; ok {
+				sharedCtx[moduleID] = summary
+				continue
+			}
+		}
+
 		files := moduleFiles[moduleID]
 		skeleton := planner.BuildSkeleton(files, idx, cfg.Agent.SkeletonMaxTokens)
 		directDeps := make(store.SharedContext, len(sharedGraph[moduleID]))
