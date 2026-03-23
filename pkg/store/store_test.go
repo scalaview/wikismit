@@ -1,7 +1,10 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -60,6 +63,20 @@ func sampleSharedContext() SharedContext {
 				Ref:       "pkg/logger/logger.go#L18",
 			}},
 		},
+	}
+}
+
+func sampleValidationReport() ValidationReport {
+	return ValidationReport{
+		GeneratedAt: time.Unix(1710001234, 0).UTC(),
+		BrokenLinks: []BrokenLink{{
+			SourceFile: "docs/modules/auth.md",
+			LinkText:   "GenerateToken",
+			LinkTarget: "internal/auth/jwt.md#generate-token",
+			Line:       14,
+		}},
+		TotalLinks: 9,
+		TotalFiles: 3,
 	}
 }
 
@@ -124,6 +141,39 @@ func TestWriteAndReadSharedContextRoundTrip(t *testing.T) {
 	}
 	if got["logger"].Summary != want["logger"].Summary {
 		t.Fatalf("round trip mismatch: got %+v want %+v", got, want)
+	}
+}
+
+func TestWriteValidationReportRoundTripsJSON(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleValidationReport()
+
+	if err := WriteValidationReport(dir, want); err != nil {
+		t.Fatalf("WriteValidationReport() error = %v", err)
+	}
+
+	path := filepath.Join(dir, "validation_report.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", path, err)
+	}
+
+	var got ValidationReport
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	if got.TotalLinks != want.TotalLinks {
+		t.Fatalf("TotalLinks = %d, want %d", got.TotalLinks, want.TotalLinks)
+	}
+	if got.TotalFiles != want.TotalFiles {
+		t.Fatalf("TotalFiles = %d, want %d", got.TotalFiles, want.TotalFiles)
+	}
+	if len(got.BrokenLinks) != 1 {
+		t.Fatalf("len(BrokenLinks) = %d, want 1", len(got.BrokenLinks))
+	}
+	if got.BrokenLinks[0].LinkTarget != want.BrokenLinks[0].LinkTarget {
+		t.Fatalf("LinkTarget = %q, want %q", got.BrokenLinks[0].LinkTarget, want.BrokenLinks[0].LinkTarget)
 	}
 }
 

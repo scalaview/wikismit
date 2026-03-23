@@ -57,6 +57,20 @@ type SharedSummary struct {
 	SourceRefs   []string      `json:"source_refs"`
 }
 
+type BrokenLink struct {
+	SourceFile string `json:"source_file"`
+	LinkText   string `json:"link_text"`
+	LinkTarget string `json:"link_target"`
+	Line       int    `json:"line"`
+}
+
+type ValidationReport struct {
+	GeneratedAt time.Time    `json:"generated_at"`
+	BrokenLinks []BrokenLink `json:"broken_links"`
+	TotalLinks  int          `json:"total_links"`
+	TotalFiles  int          `json:"total_files"`
+}
+
 type KeyFunction struct {
 	Name      string `json:"name"`
 	Signature string `json:"signature"`
