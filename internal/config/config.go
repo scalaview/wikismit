@@ -13,6 +13,7 @@ type Config struct {
 	RepoPath     string         `yaml:"repo_path"`
 	OutputDir    string         `yaml:"output_dir"`
 	ArtifactsDir string         `yaml:"artifacts_dir"`
+	Verbose      bool           `yaml:"-"`
 	LLM          LLMConfig      `yaml:"llm"`
 	Analysis     AnalysisConfig `yaml:"analysis"`
 	Agent        AgentConfig    `yaml:"agent"`

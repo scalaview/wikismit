@@ -133,6 +133,54 @@ agent:
 	}
 }
 
+func TestApplyCLIOverridesSetsVerboseOnConfig(t *testing.T) {
+	oldVerbose := verbose
+	oldRepo := repoPathOverride
+	oldOutput := outputDirOverride
+	oldArtifacts := artifactsDirOverride
+	verbose = true
+	repoPathOverride = ""
+	outputDirOverride = ""
+	artifactsDirOverride = ""
+	t.Cleanup(func() {
+		verbose = oldVerbose
+		repoPathOverride = oldRepo
+		outputDirOverride = oldOutput
+		artifactsDirOverride = oldArtifacts
+	})
+
+	cfg := &configpkg.Config{}
+	applyCLIOverrides(cfg)
+
+	if !cfg.Verbose {
+		t.Fatal("cfg.Verbose = false, want true")
+	}
+}
+
+func TestApplyCLIOverridesLeavesVerboseFalseByDefault(t *testing.T) {
+	oldVerbose := verbose
+	oldRepo := repoPathOverride
+	oldOutput := outputDirOverride
+	oldArtifacts := artifactsDirOverride
+	verbose = false
+	repoPathOverride = ""
+	outputDirOverride = ""
+	artifactsDirOverride = ""
+	t.Cleanup(func() {
+		verbose = oldVerbose
+		repoPathOverride = oldRepo
+		outputDirOverride = oldOutput
+		artifactsDirOverride = oldArtifacts
+	})
+
+	cfg := &configpkg.Config{}
+	applyCLIOverrides(cfg)
+
+	if cfg.Verbose {
+		t.Fatal("cfg.Verbose = true, want false")
+	}
+}
+
 func TestGeneratePrintsConfigErrorsToStderr(t *testing.T) {
 	stdout, stderr, err := executeCLI(t, "generate", "--config", "/tmp/does-not-exist.yaml")
 	if err == nil {
