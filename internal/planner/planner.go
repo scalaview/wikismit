@@ -2,24 +2,41 @@ package planner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (*store.NavPlan, error) {
 	_ = graph
 
+	plannerLogger := logger
+	if plannerLogger == nil {
+		plannerLogger = logpkg.New(cfg.Verbose)
+		logger = plannerLogger
+		defer func() {
+			logger = nil
+		}()
+	}
+
 	skeleton := BuildFullSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
 	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
 
 	parseErrors := make([]string, 0, 3)
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
+		if cfg.Verbose {
+			plannerLogger.Debug("starting planner completion request",
+				"skeleton_token_estimate", estimateTokens(skeleton),
+				"prompt_length", len(prompt),
+				"planner_attempt", attempt+1,
+				"model", cfg.LLM.PlannerModel,
+			)
+		}
 		response, err := client.Complete(ctx, llm.CompletionRequest{
 			Model:       cfg.LLM.PlannerModel,
 			UserMsg:     prompt,
@@ -31,7 +48,7 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 		}
 
 		var plan store.NavPlan
-		if err := json.Unmarshal([]byte(response), &plan); err == nil {
+		if err := llm.ParseJSON(response, &plan); err == nil {
 			if err := validateNavPlan(plan, idx); err != nil {
 				parseErrors = append(parseErrors, fmt.Sprintf("attempt %d: %v", attempt+1, err))
 				prompt = prompt + fmt.Sprintf("\n\nPrevious response failed validation: %v. Try again.", err)

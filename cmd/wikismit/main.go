@@ -56,6 +56,7 @@ func loadAndValidateConfig() (*configpkg.Config, error) {
 }
 
 func applyCLIOverrides(cfg *configpkg.Config) {
+	cfg.Verbose = verbose
 	if repoPathOverride != "" {
 		cfg.RepoPath = repoPathOverride
 	}

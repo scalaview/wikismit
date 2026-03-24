@@ -2,7 +2,6 @@ package preprocessor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -183,7 +182,7 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 		}
 
 		var summary store.SharedSummary
-		if err := json.Unmarshal([]byte(response), &summary); err != nil {
+		if err := llm.ParseJSON(response, &summary); err != nil {
 			return nil, err
 		}
 		sharedCtx[moduleID] = groundSharedSummaryRefs(summary, files, idx)

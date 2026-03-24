@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 )
@@ -18,12 +19,16 @@ type slogLogger struct {
 }
 
 func New(verbose bool) Logger {
+	return newWithWriter(verbose, os.Stderr)
+}
+
+func newWithWriter(verbose bool, w io.Writer) Logger {
 	level := slog.LevelInfo
 	if verbose {
 		level = slog.LevelDebug
 	}
 
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})
 	return slogLogger{inner: slog.New(handler)}
 }
 

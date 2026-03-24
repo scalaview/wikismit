@@ -1,0 +1,117 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "wikismit: generate",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "generate",
+        "--config",
+        "${workspaceFolder}/config.yaml"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal",
+      "preLaunchTask": "wikismit: clean artifacts before debug"
+    },
+    {
+      "name": "wikismit: generate (sample repo)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "generate",
+        "--config",
+        "${workspaceFolder}/config.yaml",
+        "--repo",
+        "${workspaceFolder}/testdata/sample_repo",
+        "--artifacts",
+        "${workspaceFolder}/artifacts"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal",
+      "preLaunchTask": "wikismit: clean artifacts before debug"
+    },
+    {
+      "name": "wikismit: plan",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "plan",
+        "--config",
+        "${workspaceFolder}/config.yaml"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal",
+      "preLaunchTask": "wikismit: clean artifacts before debug"
+    },
+    {
+      "name": "wikismit: update",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "update",
+        "--config",
+        "${workspaceFolder}/config.yaml",
+        "--verbose"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal",
+      "preLaunchTask": "wikismit: clean artifacts before debug"
+    },
+    {
+      "name": "wikismit: validate",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "validate",
+        "--config",
+        "${workspaceFolder}/config.yaml"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "wikismit: build",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/wikismit",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "build",
+        "--config",
+        "${workspaceFolder}/config.yaml"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+      },
+      "console": "integratedTerminal",
+      "preLaunchTask": "wikismit: clean artifacts before debug"
+    }
+  ]
+}

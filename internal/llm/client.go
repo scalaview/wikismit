@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 )
 
 type LLMError struct {
@@ -31,18 +33,29 @@ type openAIClient struct {
 	c            *openai.Client
 	defaultModel string
 	timeout      time.Duration
+	baseURL      string
+	logger       logpkg.Logger
 }
 
 func NewClient(cfg configpkg.LLMConfig) (Client, error) {
+	return newClient(cfg, nil)
+}
+
+func newClient(cfg configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
 	clientCfg := openai.DefaultConfig(cfg.APIKey())
 	if cfg.BaseURL != "" {
 		clientCfg.BaseURL = cfg.BaseURL
+	}
+	if logger == nil {
+		logger = logpkg.New(false)
 	}
 
 	return &openAIClient{
 		c:            openai.NewClientWithConfig(clientCfg),
 		defaultModel: cfg.AgentModel,
 		timeout:      time.Duration(cfg.TimeoutSeconds) * time.Second,
+		baseURL:      clientCfg.BaseURL,
+		logger:       logger,
 	}, nil
 }
 
@@ -54,28 +67,102 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		defer cancel()
 	}
 
+	var preoutput string
+	var builder strings.Builder
+
+	for true {
+		resp, err := c.complete(requestCtx, &req, preoutput)
+		if err != nil {
+			return "", err
+		}
+
+		if resp.FinishReason == openai.FinishReasonLength {
+			builder.WriteString(resp.Message.Content)
+			preoutput = builder.String()
+
+			continue
+		}
+
+		builder.WriteString(resp.Message.Content)
+		break
+	}
+
+	return builder.String(), nil
+}
+
+func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, preoutput string) (*openai.ChatCompletionChoice, error) {
 	model := req.Model
 	if model == "" {
 		model = c.defaultModel
 	}
 
-	resp, err := c.c.CreateChatCompletion(requestCtx, openai.ChatCompletionRequest{
-		Model: model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg},
-			{Role: openai.ChatMessageRoleUser, Content: req.UserMsg},
-		},
+	start := time.Now()
+	c.logger.Debug("starting chat completion request",
+		"model", model,
+		"max_tokens", req.MaxTokens,
+		"timeout_seconds", int(c.timeout/time.Second),
+		"base_url", c.baseURL,
+		"user_prompt_chars", len(req.UserMsg),
+		"estimated_user_prompt_tokens", estimatePromptTokens(len(req.UserMsg)),
+		"started_at", start.Format(time.RFC3339Nano),
+	)
+
+	msgs := make([]openai.ChatCompletionMessage, 0, 4)
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg})
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: req.UserMsg})
+
+	if preoutput != "" {
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleAssistant, Content: preoutput})
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: TruncatedOutputMessage})
+	}
+
+	resp, err := c.c.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model:       model,
+		Messages:    msgs,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})
-	if err != nil {
-		return "", normalizeLLMError(err)
+
+	finished := time.Now()
+	logCompletion := func(err error) {
+		fields := []any{
+			"model", model,
+			"max_tokens", req.MaxTokens,
+			"timeout_seconds", int(c.timeout / time.Second),
+			"base_url", c.baseURL,
+			"user_prompt_chars", len(req.UserMsg),
+			"estimated_user_prompt_tokens", estimatePromptTokens(len(req.UserMsg)),
+			"started_at", start.Format(time.RFC3339Nano),
+			"finished_at", finished.Format(time.RFC3339Nano),
+			"duration_ms", finished.Sub(start).Milliseconds(),
+		}
+		if err != nil {
+			fields = append(fields, "error_type", fmt.Sprintf("%T", err))
+		}
+		c.logger.Debug("finished chat completion request", fields...)
 	}
-	if len(resp.Choices) == 0 {
-		return "", &LLMError{Message: "empty completion response", Retryable: false}
+	if err != nil {
+		normalizedErr := normalizeLLMError(err)
+		logCompletion(normalizedErr)
+		return nil, normalizedErr
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	if len(resp.Choices) == 0 {
+		err := &LLMError{Message: "empty completion response", Retryable: false}
+		logCompletion(err)
+		return nil, normalizeLLMError(err)
+	}
+
+	logCompletion(nil)
+
+	return &resp.Choices[0], nil
+}
+
+func estimatePromptTokens(charCount int) int {
+	if charCount <= 0 {
+		return 0
+	}
+	return (charCount + 3) / 4
 }
 
 func normalizeLLMError(err error) error {

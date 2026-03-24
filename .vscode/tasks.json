@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "wikismit: clean artifacts before debug",
+      "type": "shell",
+      "command": "sh",
+      "args": [
+        "-c",
+        "rm -rf /tmp/target-repo-artifacts && mkdir -p /tmp/target-repo-artifacts"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
