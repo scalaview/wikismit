@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/pkg/store"
+	"golang.org/x/sync/errgroup"
 )
 
 type moduleRunner func(context.Context, store.Module, AgentInput) ModuleDoc
@@ -67,26 +67,24 @@ func runScheduler(ctx context.Context, modules []store.Module, input AgentInput,
 		concurrency = 1
 	}
 
-	sem := make(chan struct{}, concurrency)
 	results := make(chan ModuleDoc, len(modules))
-	var wg sync.WaitGroup
+	errGroup, _ := errgroup.WithContext(ctx)
+	errGroup.SetLimit(concurrency)
 
 	for _, module := range modules {
-		wg.Add(1)
-		sem <- struct{}{}
-
-		go func(mod store.Module) {
-			defer wg.Done()
-			defer func() { <-sem }()
-
+		mod := module
+		errGroup.Go(func() error {
 			results <- runner(ctx, mod, input)
-		}(module)
+
+			return nil
+		})
 	}
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	if err := errGroup.Wait(); err != nil {
+		return fmt.Errorf("failed to run agent: %w", err)
+	}
+
+	close(results)
 
 	failures, err := collectResults(results, artifactsDir)
 	if err != nil {
@@ -96,7 +94,6 @@ func runScheduler(ctx context.Context, modules []store.Module, input AgentInput,
 		return formatSchedulerFailure(len(modules), failures)
 	}
 
-	wg.Wait()
 	return nil
 }
 
