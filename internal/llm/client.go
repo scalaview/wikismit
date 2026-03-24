@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -66,6 +67,30 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		defer cancel()
 	}
 
+	var preoutput string
+	var builder strings.Builder
+
+	for true {
+		resp, err := c.complete(requestCtx, &req, preoutput)
+		if err != nil {
+			return "", err
+		}
+
+		if resp.FinishReason == openai.FinishReasonLength {
+			builder.WriteString(resp.Message.Content)
+			preoutput = builder.String()
+
+			continue
+		}
+
+		builder.WriteString(resp.Message.Content)
+		break
+	}
+
+	return builder.String(), nil
+}
+
+func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, preoutput string) (*openai.ChatCompletionChoice, error) {
 	model := req.Model
 	if model == "" {
 		model = c.defaultModel
@@ -82,15 +107,22 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		"started_at", start.Format(time.RFC3339Nano),
 	)
 
-	resp, err := c.c.CreateChatCompletion(requestCtx, openai.ChatCompletionRequest{
-		Model: model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg},
-			{Role: openai.ChatMessageRoleUser, Content: req.UserMsg},
-		},
+	msgs := make([]openai.ChatCompletionMessage, 0, 4)
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg})
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: req.UserMsg})
+
+	if preoutput != "" {
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleAssistant, Content: preoutput})
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: TruncatedOutputMessage})
+	}
+
+	resp, err := c.c.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model:       model,
+		Messages:    msgs,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})
+
 	finished := time.Now()
 	logCompletion := func(err error) {
 		fields := []any{
@@ -112,16 +144,18 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 	if err != nil {
 		normalizedErr := normalizeLLMError(err)
 		logCompletion(normalizedErr)
-		return "", normalizedErr
+		return nil, normalizedErr
 	}
+
 	if len(resp.Choices) == 0 {
 		err := &LLMError{Message: "empty completion response", Retryable: false}
 		logCompletion(err)
-		return "", err
+		return nil, normalizeLLMError(err)
 	}
+
 	logCompletion(nil)
 
-	return resp.Choices[0].Message.Content, nil
+	return &resp.Choices[0], nil
 }
 
 func estimatePromptTokens(charCount int) int {

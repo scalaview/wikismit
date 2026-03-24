@@ -72,6 +72,26 @@ func TestBuildPlannerPromptIncludesRulesThresholdAndSkeleton(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerPromptIncludesExplicitOwnerRules(t *testing.T) {
+	skeleton := "// === internal/auth/jwt.go ===\nfunc GenerateToken() string  // internal/auth/jwt.go:10"
+
+	got := buildPlannerPrompt(skeleton, 3)
+
+	for _, want := range []string{
+		`Non-shared modules must have owner: "agent".`,
+		`owner must never be null.`,
+		`owner must be one of: "agent" or "shared_preprocessor".`,
+		`"shared": false,`,
+		`"owner": "agent"`,
+		`"shared": true,`,
+		`"owner": "shared_preprocessor"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildPlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRunPlannerSucceedsWithValidJSONResponse(t *testing.T) {
 	cfg := samplePlannerConfig(t)
 	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)

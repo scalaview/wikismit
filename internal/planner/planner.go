@@ -2,7 +2,6 @@ package planner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -49,7 +48,7 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 		}
 
 		var plan store.NavPlan
-		if err := json.Unmarshal([]byte(response), &plan); err == nil {
+		if err := llm.ParseJSON(response, &plan); err == nil {
 			if err := validateNavPlan(plan, idx); err != nil {
 				parseErrors = append(parseErrors, fmt.Sprintf("attempt %d: %v", attempt+1, err))
 				prompt = prompt + fmt.Sprintf("\n\nPrevious response failed validation: %v. Try again.", err)
