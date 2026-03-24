@@ -9,6 +9,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 )
 
 type LLMError struct {
@@ -31,18 +32,29 @@ type openAIClient struct {
 	c            *openai.Client
 	defaultModel string
 	timeout      time.Duration
+	baseURL      string
+	logger       logpkg.Logger
 }
 
 func NewClient(cfg configpkg.LLMConfig) (Client, error) {
+	return newClient(cfg, nil)
+}
+
+func newClient(cfg configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
 	clientCfg := openai.DefaultConfig(cfg.APIKey())
 	if cfg.BaseURL != "" {
 		clientCfg.BaseURL = cfg.BaseURL
+	}
+	if logger == nil {
+		logger = logpkg.New(false)
 	}
 
 	return &openAIClient{
 		c:            openai.NewClientWithConfig(clientCfg),
 		defaultModel: cfg.AgentModel,
 		timeout:      time.Duration(cfg.TimeoutSeconds) * time.Second,
+		baseURL:      clientCfg.BaseURL,
+		logger:       logger,
 	}, nil
 }
 
@@ -59,6 +71,17 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		model = c.defaultModel
 	}
 
+	start := time.Now()
+	c.logger.Debug("starting chat completion request",
+		"model", model,
+		"max_tokens", req.MaxTokens,
+		"timeout_seconds", int(c.timeout/time.Second),
+		"base_url", c.baseURL,
+		"user_prompt_chars", len(req.UserMsg),
+		"estimated_user_prompt_tokens", estimatePromptTokens(len(req.UserMsg)),
+		"started_at", start.Format(time.RFC3339Nano),
+	)
+
 	resp, err := c.c.CreateChatCompletion(requestCtx, openai.ChatCompletionRequest{
 		Model: model,
 		Messages: []openai.ChatCompletionMessage{
@@ -68,14 +91,44 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})
+	finished := time.Now()
+	logCompletion := func(err error) {
+		fields := []any{
+			"model", model,
+			"max_tokens", req.MaxTokens,
+			"timeout_seconds", int(c.timeout / time.Second),
+			"base_url", c.baseURL,
+			"user_prompt_chars", len(req.UserMsg),
+			"estimated_user_prompt_tokens", estimatePromptTokens(len(req.UserMsg)),
+			"started_at", start.Format(time.RFC3339Nano),
+			"finished_at", finished.Format(time.RFC3339Nano),
+			"duration_ms", finished.Sub(start).Milliseconds(),
+		}
+		if err != nil {
+			fields = append(fields, "error_type", fmt.Sprintf("%T", err))
+		}
+		c.logger.Debug("finished chat completion request", fields...)
+	}
 	if err != nil {
-		return "", normalizeLLMError(err)
+		normalizedErr := normalizeLLMError(err)
+		logCompletion(normalizedErr)
+		return "", normalizedErr
 	}
 	if len(resp.Choices) == 0 {
-		return "", &LLMError{Message: "empty completion response", Retryable: false}
+		err := &LLMError{Message: "empty completion response", Retryable: false}
+		logCompletion(err)
+		return "", err
 	}
+	logCompletion(nil)
 
 	return resp.Choices[0].Message.Content, nil
+}
+
+func estimatePromptTokens(charCount int) int {
+	if charCount <= 0 {
+		return 0
+	}
+	return (charCount + 3) / 4
 }
 
 func normalizeLLMError(err error) error {
