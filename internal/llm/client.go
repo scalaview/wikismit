@@ -65,8 +65,8 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		}
 
 		if resp.FinishReason == openai.FinishReasonLength {
-			preoutput = resp.Message.Content
 			builder.WriteString(resp.Message.Content)
+			preoutput = builder.String()
 
 			continue
 		}
