@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -54,28 +55,58 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		defer cancel()
 	}
 
+	var preoutput string
+	var builder strings.Builder
+
+	for true {
+		resp, err := c.complete(requestCtx, &req, preoutput)
+		if err != nil {
+			return "", err
+		}
+
+		if resp.FinishReason == openai.FinishReasonLength {
+			preoutput = resp.Message.Content
+			builder.WriteString(resp.Message.Content)
+
+			continue
+		}
+
+		builder.WriteString(resp.Message.Content)
+		break
+	}
+
+	return builder.String(), nil
+}
+
+func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, preoutput string) (*openai.ChatCompletionChoice, error) {
 	model := req.Model
 	if model == "" {
 		model = c.defaultModel
 	}
 
-	resp, err := c.c.CreateChatCompletion(requestCtx, openai.ChatCompletionRequest{
-		Model: model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg},
-			{Role: openai.ChatMessageRoleUser, Content: req.UserMsg},
-		},
+	msgs := make([]openai.ChatCompletionMessage, 0, 4)
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg})
+	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: req.UserMsg})
+
+	if preoutput != "" {
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleAssistant, Content: preoutput})
+		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: TruncatedOutputMessage})
+	}
+
+	resp, err := c.c.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model:       model,
+		Messages:    msgs,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
 	})
 	if err != nil {
-		return "", normalizeLLMError(err)
+		return nil, normalizeLLMError(err)
 	}
 	if len(resp.Choices) == 0 {
-		return "", &LLMError{Message: "empty completion response", Retryable: false}
+		return nil, &LLMError{Message: "empty completion response", Retryable: false}
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	return &resp.Choices[0], nil
 }
 
 func normalizeLLMError(err error) error {
