@@ -2,12 +2,14 @@ package pipeline
 
 import (
 	"context"
+	"time"
 
 	"github.com/scalaview/wikismit/internal/agent"
 	"github.com/scalaview/wikismit/internal/analyzer"
 	"github.com/scalaview/wikismit/internal/composer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/internal/planner"
 	"github.com/scalaview/wikismit/internal/preprocessor"
 	"github.com/scalaview/wikismit/pkg/gitdiff"
@@ -30,7 +32,11 @@ var runComposer = composer.RunComposer
 var reanalyzeChangedFunc = reanalyzeChanged
 
 func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Client) error {
-	if err := analyzer.RunPhase1(cfg); err != nil {
+	logger := logpkg.New(cfg.Verbose)
+
+	if err := runLoggedFallbackPhase(logger, "phase1", func() error {
+		return analyzer.RunPhase1(cfg)
+	}); err != nil {
 		return err
 	}
 
@@ -42,7 +48,12 @@ func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 	if err != nil {
 		return err
 	}
-	plan, err := planner.RunPlanner(ctx, idx, graph, cfg, client)
+	var plan *store.NavPlan
+	err = runLoggedFallbackPhase(logger, "planner", func() error {
+		var plannerErr error
+		plan, plannerErr = planner.RunPlanner(ctx, idx, graph, cfg, client)
+		return plannerErr
+	})
 	if err != nil {
 		return err
 	}
@@ -50,15 +61,32 @@ func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 		return err
 	}
 
-	sharedCtx, err := preprocessor.RunPreprocessor(ctx, plan, idx, graph, cfg, client)
+	var sharedCtx store.SharedContext
+	err = runLoggedFallbackPhase(logger, "preprocessor", func() error {
+		var preprocessorErr error
+		sharedCtx, preprocessorErr = preprocessor.RunPreprocessor(ctx, plan, idx, graph, cfg, client)
+		return preprocessorErr
+	})
 	if err != nil {
 		return err
 	}
-	if err := agent.RunFor(ctx, plan.Modules, agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency); err != nil {
+	if err := runLoggedFallbackPhase(logger, "agent", func() error {
+		return agent.RunFor(ctx, plan.Modules, agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency)
+	}); err != nil {
 		return err
 	}
 
-	return composer.RunComposer(cfg, plan, idx, graph)
+	return runLoggedFallbackPhase(logger, "composer", func() error {
+		return composer.RunComposer(cfg, plan, idx, graph)
+	})
+}
+
+func runLoggedFallbackPhase(logger logpkg.Logger, phase string, fn func() error) error {
+	start := time.Now()
+	logger.Debug("starting fallback full-generate phase", "phase", phase)
+	err := fn()
+	logger.Debug("finished fallback full-generate phase", "phase", phase, "duration_ms", time.Since(start).Milliseconds())
+	return err
 }
 
 func RunIncremental(ctx context.Context, cfg *configpkg.Config, client llm.Client, opts IncrementalOptions) error {

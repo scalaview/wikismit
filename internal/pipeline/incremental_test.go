@@ -1,9 +1,12 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,10 +14,145 @@ import (
 	"github.com/scalaview/wikismit/internal/agent"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/internal/preprocessor"
 	"github.com/scalaview/wikismit/pkg/gitdiff"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func TestRunFullGenerateVerboseLoggingIncludesFallbackPhaseBoundariesInOrder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stderr pipe capture is unix-focused")
+	}
+
+	repoPath := t.TempDir()
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	writeRepoFile(t, repoPath, "go.mod", "module example.com/test\n\ngo 1.25.0\n")
+	writeRepoFile(t, repoPath, "internal/auth/jwt.go", "package auth\n\nfunc GenerateToken() string { return \"token\" }\n")
+	if err := os.MkdirAll(filepath.Join(artifactsDir, "module_docs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(module_docs) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactsDir, "module_docs", "auth.md"), []byte("# Auth\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	cfg := &configpkg.Config{
+		RepoPath:     repoPath,
+		ArtifactsDir: artifactsDir,
+		OutputDir:    outputDir,
+		Verbose:      true,
+		Analysis:     configpkg.AnalysisConfig{},
+		Agent: configpkg.AgentConfig{
+			Concurrency:       1,
+			SkeletonMaxTokens: 3000,
+		},
+		LLM: configpkg.LLMConfig{
+			PlannerModel:      "planner-test-model",
+			PreprocessorModel: "preprocessor-test-model",
+			AgentModel:        "agent-test-model",
+			MaxTokens:         1024,
+			Temperature:       0.2,
+		},
+	}
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
+		"# Auth\n",
+	)
+
+	out := captureStderrOutput(t, func() {
+		if err := runFullGenerate(context.Background(), cfg, client); err != nil {
+			t.Fatalf("runFullGenerate() error = %v", err)
+		}
+	})
+
+	orderedMessages := []string{
+		`msg="starting fallback full-generate phase" phase=phase1`,
+		`msg="finished fallback full-generate phase" phase=phase1`,
+		`msg="starting fallback full-generate phase" phase=planner`,
+		`msg="finished fallback full-generate phase" phase=planner`,
+		`msg="starting fallback full-generate phase" phase=preprocessor`,
+		`msg="finished fallback full-generate phase" phase=preprocessor`,
+		`msg="starting fallback full-generate phase" phase=agent`,
+		`msg="finished fallback full-generate phase" phase=agent`,
+		`msg="starting fallback full-generate phase" phase=composer`,
+		`msg="finished fallback full-generate phase" phase=composer`,
+	}
+	assertOrderedSubstrings(t, out, orderedMessages)
+
+	for _, phase := range []string{"phase1", "planner", "preprocessor", "agent", "composer"} {
+		if got := strings.Count(out, "phase="+phase); got != 2 {
+			t.Fatalf("log count for %s = %d, want 2; output=%q", phase, got, out)
+		}
+	}
+	if got := strings.Count(out, `msg="finished fallback full-generate phase"`); got != 5 {
+		t.Fatalf("finished phase log count = %d, want 5; output=%q", got, out)
+	}
+	if !regexp.MustCompile(`msg="finished fallback full-generate phase" phase=phase1 .*duration_ms=\d+`).MatchString(out) {
+		t.Fatalf("phase1 finish log missing duration_ms: %q", out)
+	}
+}
+
+func TestRunFullGenerateWithoutVerboseOmitsFallbackPhaseBoundaryDebugLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stderr pipe capture is unix-focused")
+	}
+
+	repoPath := t.TempDir()
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	writeRepoFile(t, repoPath, "go.mod", "module example.com/test\n\ngo 1.25.0\n")
+	writeRepoFile(t, repoPath, "internal/auth/jwt.go", "package auth\n\nfunc GenerateToken() string { return \"token\" }\n")
+	if err := os.MkdirAll(filepath.Join(artifactsDir, "module_docs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(module_docs) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(artifactsDir, "module_docs", "auth.md"), []byte("# Auth\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	cfg := &configpkg.Config{
+		RepoPath:     repoPath,
+		ArtifactsDir: artifactsDir,
+		OutputDir:    outputDir,
+		Verbose:      false,
+		Analysis:     configpkg.AnalysisConfig{},
+		Agent: configpkg.AgentConfig{
+			Concurrency:       1,
+			SkeletonMaxTokens: 3000,
+		},
+		LLM: configpkg.LLMConfig{
+			PlannerModel:      "planner-test-model",
+			PreprocessorModel: "preprocessor-test-model",
+			AgentModel:        "agent-test-model",
+			MaxTokens:         1024,
+			Temperature:       0.2,
+		},
+	}
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
+		"# Auth\n",
+	)
+
+	out := captureStderrOutput(t, func() {
+		if err := runFullGenerate(context.Background(), cfg, client); err != nil {
+			t.Fatalf("runFullGenerate() error = %v", err)
+		}
+	})
+
+	for _, unwanted := range []string{
+		"starting fallback full-generate phase",
+		"finished fallback full-generate phase",
+		"phase=phase1",
+		"phase=planner",
+		"phase=preprocessor",
+		"phase=agent",
+		"phase=composer",
+	} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("non-verbose output unexpectedly contained %q in %q", unwanted, out)
+		}
+	}
+}
 
 func TestRunIncrementalFallsBackToFullGenerateWhenArtifactsMissing(t *testing.T) {
 	cfg := &configpkg.Config{ArtifactsDir: t.TempDir()}
@@ -388,6 +526,51 @@ func writeMinimalArtifacts(artifactsDir string) error {
 		"internal/auth/jwt.go": {},
 	})
 }
+
+func captureStderrOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	os.Stderr = w
+
+	outputCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		outputCh <- buf.String()
+	}()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("stderr close error = %v", err)
+	}
+	os.Stderr = originalStderr
+	t.Cleanup(func() {
+		os.Stderr = originalStderr
+	})
+
+	return <-outputCh
+}
+
+func assertOrderedSubstrings(t *testing.T, content string, ordered []string) {
+	t.Helper()
+
+	position := 0
+	for _, want := range ordered {
+		idx := strings.Index(content[position:], want)
+		if idx == -1 {
+			t.Fatalf("output missing ordered substring %q after byte %d in %q", want, position, content)
+		}
+		position += idx + len(want)
+	}
+}
+
+var _ logpkg.Logger
 
 func writeRepoFile(t *testing.T, repoPath string, relPath string, content string) {
 	t.Helper()
