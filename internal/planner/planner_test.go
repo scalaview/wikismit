@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -304,6 +306,79 @@ func TestRunPlannerVerboseLoggingIncludesPromptSizingAndAttemptMetadataBeforeEac
 			t.Fatalf("planner log output = %q, should not contain prompt body fragment %q", buf.String(), unwanted)
 		}
 	}
+}
+
+func TestRunPlannerVerboseLoggingUsesVerboseLoggerWithoutTestOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stderr pipe capture is unix-focused")
+	}
+
+	previous := logger
+	logger = nil
+	t.Cleanup(func() {
+		logger = previous
+	})
+
+	cfg := samplePlannerConfig(t)
+	cfg.Verbose = true
+	idx := samplePlannerIndex()
+	graph := samplePlannerGraph()
+	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
+
+	out := captureStderrOutput(t, func() {
+		_, err := RunPlanner(context.Background(), idx, graph, cfg, client)
+		if err != nil {
+			t.Fatalf("RunPlanner() error = %v", err)
+		}
+	})
+
+	for _, want := range []string{
+		`level=DEBUG`,
+		`msg="starting planner completion request"`,
+		`skeleton_token_estimate=`,
+		`prompt_length=`,
+		`planner_attempt=1`,
+		`model=planner-test-model`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("planner log output missing %q in %q", want, out)
+		}
+	}
+	for _, unwanted := range []string{"GenerateToken", "internal/auth/jwt.go:10"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("planner log output = %q, should not contain prompt body fragment %q", out, unwanted)
+		}
+	}
+}
+
+func captureStderrOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error = %v", err)
+	}
+	os.Stderr = w
+
+	outputCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+		outputCh <- buf.String()
+	}()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("stderr close error = %v", err)
+	}
+	os.Stderr = originalStderr
+	t.Cleanup(func() {
+		os.Stderr = originalStderr
+	})
+
+	return <-outputCh
 }
 
 func capturePlannerLogOutput(t *testing.T, verbose bool) *bytes.Buffer {

@@ -16,12 +16,17 @@ import (
 func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (*store.NavPlan, error) {
 	_ = graph
 
-	skeleton := BuildFullSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
-	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
 	plannerLogger := logger
 	if plannerLogger == nil {
-		plannerLogger = logpkg.New(false)
+		plannerLogger = logpkg.New(cfg.Verbose)
+		logger = plannerLogger
+		defer func() {
+			logger = nil
+		}()
 	}
+
+	skeleton := BuildFullSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
+	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
 
 	parseErrors := make([]string, 0, 3)
 	for attempt := range 3 {
