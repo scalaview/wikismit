@@ -407,3 +407,32 @@ func TestRunPreprocessorFallsBackToPlannerModel(t *testing.T) {
 		}
 	}
 }
+
+func TestRunPreprocessorWritesSharedModuleMarkdownArtifacts(t *testing.T) {
+	cfg := samplePreprocessorConfig(t)
+	client := llm.NewMockClient(
+		`{"summary":"Shared error helpers.","key_types":["Error"],"key_functions":[{"name":"Wrap","signature":"func Wrap(err error) error","ref":"wrong.go#L1"}]}`,
+		`{"summary":"Structured logger built on shared errors.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L2"}]}`,
+	)
+
+	_, err := RunPreprocessor(context.Background(), samplePreprocessorPlan(), samplePreprocessorIndex(), samplePreprocessorGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPreprocessor() error = %v", err)
+	}
+
+	for moduleID, wants := range map[string][]string{
+		"errors": {"# errors", "Shared error helpers.", "## Key Functions", "pkg/errors/errors.go#L11"},
+		"logger": {"# logger", "Structured logger built on shared errors.", "## Key Functions", "pkg/logger/logger.go#L18"},
+	} {
+		data, err := os.ReadFile(filepath.Join(cfg.ArtifactsDir, "module_docs", moduleID+".md"))
+		if err != nil {
+			t.Fatalf("ReadFile(%s.md) error = %v", moduleID, err)
+		}
+		content := string(data)
+		for _, want := range wants {
+			if !strings.Contains(content, want) {
+				t.Fatalf("%s.md missing %q:\n%s", moduleID, want, content)
+			}
+		}
+	}
+}
