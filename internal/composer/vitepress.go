@@ -56,6 +56,19 @@ export default defineConfig({
 })
 `))
 
+const docsPackageJSON = `{
+  "private": true,
+  "scripts": {
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview",
+    "docs:dev": "vitepress dev"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
+`
+
 func GenerateVitePressConfig(plan *store.NavPlan, graph store.DepGraph, cfg *configpkg.Config) (string, error) {
 	_ = graph
 
@@ -102,7 +115,10 @@ func WriteVitePressAssets(docsDir string, configText string, cfg *configpkg.Conf
 	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte(configText), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.mts"), []byte(configText), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(docsDir, "package.json"), []byte(docsPackageJSON), 0o644); err != nil {
 		return err
 	}
 
