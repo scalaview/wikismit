@@ -186,6 +186,9 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 			return nil, err
 		}
 		sharedCtx[moduleID] = groundSharedSummaryRefs(summary, files, idx)
+		if err := writeSharedModuleMarkdown(cfg.ArtifactsDir, moduleID, sharedCtx[moduleID]); err != nil {
+			return nil, fmt.Errorf("write shared module markdown for %s: %w", moduleID, err)
+		}
 	}
 
 	if err := store.WriteSharedContext(cfg.ArtifactsDir, sharedCtx); err != nil {

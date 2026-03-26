@@ -245,8 +245,21 @@ func TestRunComposerWritesVitePressConfigAndOptionalLogo(t *testing.T) {
 		t.Fatalf("RunComposer() error = %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(outputDir, ".vitepress", "config.ts")); err != nil {
+	if _, err := os.Stat(filepath.Join(outputDir, ".vitepress", "config.mts")); err != nil {
 		t.Fatalf("vitepress config missing: %v", err)
+	}
+	packageJSON, err := os.ReadFile(filepath.Join(outputDir, "package.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(package.json) error = %v", err)
+	}
+	for _, want := range []string{
+		`"docs:build": "vitepress build"`,
+		`"docs:preview": "vitepress preview"`,
+		`"docs:dev": "vitepress dev"`,
+	} {
+		if !strings.Contains(string(packageJSON), want) {
+			t.Fatalf("package.json missing %q:\n%s", want, string(packageJSON))
+		}
 	}
 	logoData, err := os.ReadFile(filepath.Join(outputDir, "public", "logo.png"))
 	if err != nil {

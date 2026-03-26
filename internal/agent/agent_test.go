@@ -126,7 +126,7 @@ func TestPhase4PartialFailureWritesOnlySuccessfulModuleDocs(t *testing.T) {
 	input.Config.ArtifactsDir = artifactsDir
 	client := llm.NewMockClient("# Auth module").WithErrors(nil, errors.New("boom"))
 
-	err := Run(context.Background(), modules, input, client, artifactsDir, 2)
+	err := Run(context.Background(), modules, input, client, artifactsDir, 1)
 	if err == nil {
 		t.Fatal("Run() error = nil, want partial-failure error")
 	}

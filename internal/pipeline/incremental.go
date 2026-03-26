@@ -22,7 +22,7 @@ type IncrementalOptions struct {
 	ChangedFiles string
 }
 
-var runGenerateFallback = runFullGenerate
+var runGenerateFallback = RunFullGenerate
 
 var getChangedFiles = gitdiff.GetChangedFiles
 var computeAffected = analyzer.ComputeAffected
@@ -31,7 +31,7 @@ var runAgentFor = agent.RunFor
 var runComposer = composer.RunComposer
 var reanalyzeChangedFunc = reanalyzeChanged
 
-func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Client) error {
+func RunFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Client) error {
 	logger := logpkg.New(cfg.Verbose)
 
 	if err := runLoggedFallbackPhase(logger, "phase1", func() error {
@@ -79,6 +79,10 @@ func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 	return runLoggedFallbackPhase(logger, "composer", func() error {
 		return composer.RunComposer(cfg, plan, idx, graph)
 	})
+}
+
+func runFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Client) error {
+	return RunFullGenerate(ctx, cfg, client)
 }
 
 func runLoggedFallbackPhase(logger logpkg.Logger, phase string, fn func() error) error {

@@ -108,6 +108,32 @@ func TestWriteVitePressAssetsCopiesLogoWhenConfigured(t *testing.T) {
 	if string(data) != "logo-bytes" {
 		t.Fatalf("public logo content = %q, want %q", string(data), "logo-bytes")
 	}
+	if _, err := os.Stat(filepath.Join(docsDir, ".vitepress", "config.mts")); err != nil {
+		t.Fatalf("config.mts missing: %v", err)
+	}
+}
+
+func TestWriteVitePressAssetsWritesDocsPackageScripts(t *testing.T) {
+	docsDir := t.TempDir()
+
+	if err := WriteVitePressAssets(docsDir, "export default {}\n", &configpkg.Config{OutputDir: docsDir}); err != nil {
+		t.Fatalf("WriteVitePressAssets() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(docsDir, "package.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(package.json) error = %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		`"docs:build": "vitepress build"`,
+		`"docs:preview": "vitepress preview"`,
+		`"docs:dev": "vitepress dev"`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("package.json missing %q:\n%s", want, content)
+		}
+	}
 }
 
 func TestGenerateVitePressConfigOmitsTemplateArtifactsFromOutput(t *testing.T) {

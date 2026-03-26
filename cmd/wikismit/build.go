@@ -20,13 +20,24 @@ var runCommand = func(dir string, name string, args ...string) error {
 	return cmd.Run()
 }
 
+func existingConfigPath(outputDir string) (string, error) {
+	for _, name := range []string{"config.mts", "config.ts"} {
+		path := filepath.Join(outputDir, ".vitepress", name)
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+	return "", os.ErrNotExist
+}
+
 func newBuildCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "build",
 		Short: "Build VitePress site",
 		RunE: runWithConfig(func(cmd *cobra.Command, cfg *configpkg.Config) error {
-			configPath := filepath.Join(cfg.OutputDir, ".vitepress", "config.ts")
-			if _, err := os.Stat(configPath); err != nil {
+			if _, err := existingConfigPath(cfg.OutputDir); err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					return errors.New("missing VitePress config; run wikismit generate first")
 				}
@@ -37,15 +48,25 @@ func newBuildCmd() *cobra.Command {
 			}
 
 			nodeModulesPath := filepath.Join(cfg.OutputDir, "node_modules")
+			packageJSONPath := filepath.Join(cfg.OutputDir, "package.json")
+			_, packageJSONErr := os.Stat(packageJSONPath)
 			if _, err := os.Stat(nodeModulesPath); errors.Is(err, os.ErrNotExist) {
-				if err := runCommand(cfg.OutputDir, "npm", "install", "-D", "vitepress"); err != nil {
+				installArgs := []string{"install"}
+				if packageJSONErr != nil {
+					installArgs = []string{"install", "-D", "vitepress"}
+				}
+				if err := runCommand(cfg.OutputDir, "npm", installArgs...); err != nil {
 					return err
 				}
 			} else if err != nil {
 				return err
 			}
 
-			if err := runCommand(cfg.OutputDir, "npx", "vitepress", "build", "docs"); err != nil {
+			if packageJSONErr == nil {
+				if err := runCommand(cfg.OutputDir, "npm", "run", "docs:build"); err != nil {
+					return err
+				}
+			} else if err := runCommand(cfg.OutputDir, "npx", "vitepress", "build", "docs"); err != nil {
 				return err
 			}
 			return writeCommandOutput(cmd, fmt.Sprintf("Build complete: VitePress site built from %s\n", cfg.OutputDir))
