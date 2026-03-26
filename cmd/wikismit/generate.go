@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/scalaview/wikismit/internal/agent"
@@ -9,6 +10,7 @@ import (
 	"github.com/scalaview/wikismit/internal/composer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/pipeline"
 	"github.com/scalaview/wikismit/pkg/store"
 	"github.com/spf13/cobra"
 )
@@ -52,10 +54,16 @@ func runGenerate(cmd *cobra.Command, cfg *configpkg.Config, client llm.Client) e
 	}
 	plan, err := store.ReadNavPlan(cfg.ArtifactsDir)
 	if err != nil {
+		if errors.Is(err, store.ErrArtifactNotFound) {
+			return pipeline.RunFullGenerate(context.Background(), cfg, client)
+		}
 		return err
 	}
 	sharedContext, err := store.ReadSharedContext(cfg.ArtifactsDir)
 	if err != nil {
+		if errors.Is(err, store.ErrArtifactNotFound) {
+			return pipeline.RunFullGenerate(context.Background(), cfg, client)
+		}
 		return err
 	}
 

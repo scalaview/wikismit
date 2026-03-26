@@ -783,6 +783,43 @@ func TestGenerateCommandRunsComposerAfterPhase4(t *testing.T) {
 	}
 }
 
+func TestGenerateCommandFallsBackToFullGenerateWhenPlanArtifactsAreMissing(t *testing.T) {
+	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	cfg := sampleGenerateConfig(repoDir, artifactsDir)
+	cfg.OutputDir = outputDir
+	client := llm.NewMockClient(
+		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go","internal/auth/middleware.go"],"shared":false,"owner":"agent","depends_on_shared":["errors","logger"]},{"id":"api","files":["internal/api/handler.go"],"shared":false,"owner":"agent","depends_on_shared":["logger"]},{"id":"db","files":["internal/db/client.go"],"shared":false,"owner":"agent","depends_on_shared":["errors","logger"]},{"id":"cmd","files":["cmd/main.go"],"shared":false,"owner":"agent"},{"id":"errors","files":["pkg/errors/errors.go"],"shared":true,"owner":"shared_preprocessor"},{"id":"logger","files":["pkg/logger/logger.go"],"shared":true,"owner":"shared_preprocessor"}]}`,
+		`{"summary":"Shared error helpers.","key_types":[],"key_functions":[]}`,
+		`{"summary":"Shared logger helpers.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() *Logger","ref":"wrong.go#L1"}]}`,
+		"# Auth doc\n\n## Overview\n",
+		"# API doc\n\n## Overview\n",
+		"# DB doc\n\n## Overview\n",
+		"# CMD doc\n\n## Overview\n",
+	)
+
+	if err := runGenerate(newGenerateCmd(), cfg, client); err != nil {
+		t.Fatalf("runGenerate() error = %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(artifactsDir, "file_index.json"),
+		filepath.Join(artifactsDir, "dep_graph.json"),
+		filepath.Join(artifactsDir, "nav_plan.json"),
+		filepath.Join(artifactsDir, "shared_context.json"),
+		filepath.Join(artifactsDir, "module_docs", "auth.md"),
+		filepath.Join(outputDir, "index.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected generated artifact %q: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "shared", "logger.md")); err != nil {
+		t.Fatalf("shared/logger.md missing: %v", err)
+	}
+}
+
 func TestGenerateCommandLoadsDepGraphForPhase5(t *testing.T) {
 	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
 	artifactsDir := t.TempDir()
@@ -847,8 +884,8 @@ func TestBuildCommandErrorsWhenNodeIsUnavailable(t *testing.T) {
 	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(vitepressDir) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.mts"), []byte("export default {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.mts) error = %v", err)
 	}
 
 	t.Setenv("OPENAI_API_KEY", "secret-token")
@@ -885,8 +922,11 @@ func TestBuildCommandInstallsVitePressWhenNodeModulesMissing(t *testing.T) {
 	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(vitepressDir) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	if err := os.WriteFile(filepath.Join(vitepressDir, "config.mts"), []byte("export default {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.mts) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "package.json"), []byte(`{"scripts":{"docs:build":"vitepress build"}}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(package.json) error = %v", err)
 	}
 
 	originalLookPath := lookPath
@@ -926,11 +966,11 @@ agent:
 	if len(commands) != 2 {
 		t.Fatalf("command count = %d, want 2; commands = %#v", len(commands), commands)
 	}
-	if !strings.Contains(commands[0], "npm install -D vitepress") {
-		t.Fatalf("first command = %q, want npm install", commands[0])
+	if !strings.Contains(commands[0], "npm install") || strings.Contains(commands[0], "vitepress") {
+		t.Fatalf("first command = %q, want plain npm install", commands[0])
 	}
-	if !strings.Contains(commands[1], "npx vitepress build docs") {
-		t.Fatalf("second command = %q, want vitepress build", commands[1])
+	if !strings.Contains(commands[1], "npm run docs:build") {
+		t.Fatalf("second command = %q, want npm run docs:build", commands[1])
 	}
 }
 
@@ -942,6 +982,9 @@ func TestBuildCommandSkipsInstallWhenNodeModulesAlreadyExist(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(vitepressDir, "config.ts"), []byte("export default {}\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(config.ts) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "package.json"), []byte(`{"scripts":{"docs:build":"vitepress build"}}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(package.json) error = %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(outputDir, "node_modules"), 0o755); err != nil {
 		t.Fatalf("MkdirAll(node_modules) error = %v", err)
@@ -984,7 +1027,7 @@ agent:
 	if len(commands) != 1 {
 		t.Fatalf("command count = %d, want 1; commands = %#v", len(commands), commands)
 	}
-	if !strings.Contains(commands[0], "npx vitepress build docs") {
-		t.Fatalf("command = %q, want vitepress build", commands[0])
+	if !strings.Contains(commands[0], "npm run docs:build") {
+		t.Fatalf("command = %q, want npm run docs:build", commands[0])
 	}
 }
