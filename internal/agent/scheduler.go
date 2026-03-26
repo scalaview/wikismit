@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/pkg/store"
@@ -76,8 +75,6 @@ func runScheduler(ctx context.Context, modules []store.Module, input AgentInput,
 		mod := module
 		errGroup.Go(func() error {
 			results <- runner(ctx, mod, input)
-			time.Sleep(5 * time.Second)
-
 			return nil
 		})
 	}
