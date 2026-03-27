@@ -64,11 +64,12 @@ func (a *Analyzer) resolveImports(repoPath string, entry *store.FileEntry) error
 func resolveInternalImportPath(repoPath string, modulePath string, importPath string) (string, error) {
 	relImportPath := strings.TrimPrefix(importPath, modulePath)
 	relImportPath = strings.TrimPrefix(relImportPath, "/")
-	if relImportPath == "" {
-		return "", fmt.Errorf("resolve internal import %q: empty relative path", importPath)
+	dirCandidate := repoPath
+	if relImportPath != "" {
+		dirCandidate = filepath.Join(repoPath, relImportPath)
 	}
 
-	fileCandidate := filepath.Join(repoPath, relImportPath+".go")
+	fileCandidate := dirCandidate + ".go"
 	if info, err := os.Stat(fileCandidate); err == nil && !info.IsDir() {
 		relPath, relErr := filepath.Rel(repoPath, fileCandidate)
 		if relErr != nil {
@@ -77,7 +78,6 @@ func resolveInternalImportPath(repoPath string, modulePath string, importPath st
 		return filepath.ToSlash(relPath), nil
 	}
 
-	dirCandidate := filepath.Join(repoPath, relImportPath)
 	entries, err := os.ReadDir(dirCandidate)
 	if err != nil {
 		return "", fmt.Errorf("resolve internal import %q: %w", importPath, err)

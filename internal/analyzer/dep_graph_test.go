@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -133,5 +134,49 @@ func TestBuildDepGraphOmitsThirdPartyEdges(t *testing.T) {
 	}
 	if len(graph) != len(idx) {
 		t.Fatalf("dep graph keys = %d, want %d", len(graph), len(idx))
+	}
+}
+
+func TestResolveInternalImportsHandlesModuleRootImport(t *testing.T) {
+	repoPath := copySampleRepo(t)
+
+	rootAlphaPath := filepath.Join(repoPath, "alpha.go")
+	if err := os.WriteFile(rootAlphaPath, []byte("package sample\n\nfunc Alpha() {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(alpha.go) error = %v", err)
+	}
+	rootZetaPath := filepath.Join(repoPath, "zeta.go")
+	if err := os.WriteFile(rootZetaPath, []byte("package sample\n\nfunc Zeta() {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(zeta.go) error = %v", err)
+	}
+
+	consumerPath := filepath.Join(repoPath, "internal", "consumer", "consumer.go")
+	if err := os.MkdirAll(filepath.Dir(consumerPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(consumer) error = %v", err)
+	}
+	if err := os.WriteFile(consumerPath, []byte("package consumer\n\nimport \"github.com/wikismit/sample\"\n\nfunc Use() { sample.Alpha() }\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(consumer.go) error = %v", err)
+	}
+
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	idx, err := analyzer.Analyze(repoPath)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+
+	consumerImports := idx["internal/consumer/consumer.go"].Imports
+	if len(consumerImports) != 1 {
+		t.Fatalf("consumer imports len = %d, want 1", len(consumerImports))
+	}
+	if !consumerImports[0].Internal {
+		t.Fatal("consumer import should be marked internal")
+	}
+	if consumerImports[0].ResolvedPath != "alpha.go" {
+		t.Fatalf("consumer resolved path = %q, want %q", consumerImports[0].ResolvedPath, "alpha.go")
+	}
+	if resolved, err := resolveInternalImportPath(repoPath, "github.com/wikismit/sample", "github.com/wikismit/sample/internal/api"); err != nil {
+		t.Fatalf("resolveInternalImportPath(subpackage) error = %v", err)
+	} else if resolved != "internal/api/handler.go" {
+		t.Fatalf("resolveInternalImportPath(subpackage) = %q, want %q", resolved, "internal/api/handler.go")
 	}
 }
