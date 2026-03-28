@@ -28,6 +28,7 @@ var vitepressConfigTemplate = template.Must(template.New("vitepress-config").Par
 
 export default defineConfig({
   title: '{{ .Title }}',
+  ignoreDeadLinks: true,
   themeConfig: {
 {{- if .HasEditLink }}
     editLink: {
