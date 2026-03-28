@@ -145,3 +145,20 @@ func TestGenerateVitePressConfigOmitsTemplateArtifactsFromOutput(t *testing.T) {
 		t.Fatalf("config contains leftover template markers:\n%s", result)
 	}
 }
+
+func TestGenerateVitePressConfigIncludesIgnoreDeadLinks(t *testing.T) {
+	plan := &store.NavPlan{}
+	cfg := &configpkg.Config{
+		RepoPath: "/tmp/wikismit",
+		Site:     configpkg.SiteConfig{Title: "Test Docs"},
+	}
+
+	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, cfg)
+	if err != nil {
+		t.Fatalf("GenerateVitePressConfig() error = %v", err)
+	}
+
+	if !strings.Contains(result, "ignoreDeadLinks: true") {
+		t.Fatalf("config missing ignoreDeadLinks: true:\n%s", result)
+	}
+}
