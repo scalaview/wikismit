@@ -332,6 +332,84 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 	}
 }
 
+func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *testing.T) {
+	cfg := samplePreprocessorConfig(t)
+	idx := store.FileIndex{
+		"pkg/errors/errors.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "Wrap",
+				Signature: "func Wrap(err error) error",
+				LineStart: 11,
+				Exported:  true,
+			}},
+		},
+		"pkg/logger/logger.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "New",
+				Signature: "func New() Logger",
+				LineStart: 18,
+				Exported:  true,
+			}},
+		},
+		"pkg/config/config.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "Load",
+				Signature: "func Load() Config",
+				LineStart: 25,
+				Exported:  true,
+			}},
+		},
+	}
+	plan := &store.NavPlan{
+		Modules: []store.Module{
+			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
+			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
+			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},
+		},
+	}
+	graph := store.DepGraph{
+		"pkg/errors/errors.go": {},
+		"pkg/logger/logger.go": {"pkg/config/config.go", "pkg/errors/errors.go"},
+		"pkg/config/config.go": {"pkg/logger/logger.go", "pkg/errors/errors.go"},
+	}
+	client := llm.NewMockClient(
+		`{"summary":"Error handling primitives.","key_types":["WrapError"],"key_functions":[{"name":"Wrap","signature":"func Wrap(err error) error","ref":"wrong.go#L1"}]}`,
+		`{"summary":"Configuration management.","key_types":["Config"],"key_functions":[{"name":"Load","signature":"func Load() Config","ref":"wrong.go#L2"}]}`,
+		`{"summary":"Structured logger.","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L3"}]}`,
+	)
+
+	got, err := RunPreprocessor(context.Background(), plan, idx, graph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunPreprocessor() error = %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len(RunPreprocessor()) = %d, want 3", len(got))
+	}
+
+	calls := client.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("len(MockClient.Calls()) = %d, want 3", len(calls))
+	}
+	if !strings.Contains(calls[1].UserMsg, "- errors: Error handling primitives.") {
+		t.Fatalf("config prompt missing already-available external dependency:\n%s", calls[1].UserMsg)
+	}
+	if strings.Contains(calls[1].UserMsg, "- logger:") {
+		t.Fatalf("config prompt unexpectedly contained cyclic peer summary:\n%s", calls[1].UserMsg)
+	}
+	if !strings.Contains(calls[2].UserMsg, "- errors: Error handling primitives.") {
+		t.Fatalf("logger prompt missing already-available external dependency:\n%s", calls[2].UserMsg)
+	}
+	if strings.Contains(calls[2].UserMsg, "- config:") {
+		t.Fatalf("logger prompt unexpectedly contained cyclic peer summary:\n%s", calls[2].UserMsg)
+	}
+	if got["config"].KeyFunctions[0].Ref != "pkg/config/config.go#L25" {
+		t.Fatalf("config ref = %q, want grounded ref", got["config"].KeyFunctions[0].Ref)
+	}
+	if got["logger"].KeyFunctions[0].Ref != "pkg/logger/logger.go#L18" {
+		t.Fatalf("logger ref = %q, want grounded ref", got["logger"].KeyFunctions[0].Ref)
+	}
+}
+
 func TestRunPreprocessorSkipsLLMCallsWhenNoSharedModulesExist(t *testing.T) {
 	cfg := samplePreprocessorConfig(t)
 	client := llm.NewMockClient()

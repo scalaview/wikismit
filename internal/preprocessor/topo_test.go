@@ -76,3 +76,21 @@ func TestTopoSortReturnsEmptyOrderForEmptyGraph(t *testing.T) {
 		t.Fatalf("topoSort() = %v, want empty", got)
 	}
 }
+
+func TestTopoSortComponentsGroupsCyclesAfterExternalDependencies(t *testing.T) {
+	got := topoSortComponents(map[string][]string{
+		"config": {"errors", "logger"},
+		"errors": {},
+		"logger": {"config"},
+	})
+
+	if len(got) != 2 {
+		t.Fatalf("len(topoSortComponents()) = %d, want 2 (full=%v)", len(got), got)
+	}
+	if len(got[0]) != 1 || got[0][0] != "errors" {
+		t.Fatalf("topoSortComponents()[0] = %v, want [errors]", got[0])
+	}
+	if len(got[1]) != 2 || got[1][0] != "config" || got[1][1] != "logger" {
+		t.Fatalf("topoSortComponents()[1] = %v, want [config logger]", got[1])
+	}
+}
