@@ -23,16 +23,9 @@ func newUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Run incremental update",
 		RunE: runWithConfig(func(cmd *cobra.Command, cfg *configpkg.Config) error {
-			client := updateClientFactory()
-			if client == nil {
-				client = agentClientFactory()
-			}
-			if client == nil {
-				var err error
-				client, err = llm.NewClient(cfg.LLM)
-				if err != nil {
-					return err
-				}
+			client, err := resolveClientWithFallback(updateClientFactory, agentClientFactory, cfg)
+			if err != nil {
+				return err
 			}
 
 			fallbackToFull := false
@@ -44,7 +37,7 @@ func newUpdateCmd() *cobra.Command {
 				}
 			}
 
-			err := pipeline.RunIncremental(context.Background(), cfg, client, pipeline.IncrementalOptions{
+			err = pipeline.RunIncremental(context.Background(), cfg, client, pipeline.IncrementalOptions{
 				BaseRef:      baseRef,
 				HeadRef:      headRef,
 				ChangedFiles: changedFiles,

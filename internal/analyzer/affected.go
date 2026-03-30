@@ -53,7 +53,7 @@ func buildReverseGraph(graph store.DepGraph) store.DepGraph {
 	return reversed
 }
 
-func ComputeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
+func computeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
 	if plan == nil || len(changedFiles) == 0 {
 		return []store.Module{}
 	}
@@ -115,4 +115,21 @@ func ComputeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, gra
 	})
 
 	return modules
+}
+
+func ComputeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
+	return computeAffected(changedFiles, plan, graph)
+}
+
+type ImpactAnalyzer struct {
+	plan  *store.NavPlan
+	graph store.DepGraph
+}
+
+func NewImpactAnalyzer(plan *store.NavPlan, graph store.DepGraph) *ImpactAnalyzer {
+	return &ImpactAnalyzer{plan: plan, graph: graph}
+}
+
+func (a *ImpactAnalyzer) Analyze(changedFiles []gitdiff.FileChange) []store.Module {
+	return computeAffected(changedFiles, a.plan, a.graph)
 }
