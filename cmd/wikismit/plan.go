@@ -34,12 +34,9 @@ func newPlanCmd() *cobra.Command {
 				return err
 			}
 
-			client := plannerClientFactory()
-			if client == nil {
-				client, err = llm.NewClient(cfg.LLM)
-				if err != nil {
-					return err
-				}
+			client, err := resolveClient(plannerClientFactory, cfg)
+			if err != nil {
+				return err
 			}
 
 			navPlan, err := planner.RunPlanner(context.Background(), idx, graph, cfg, client)

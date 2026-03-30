@@ -22,13 +22,9 @@ func newGenerateCmd() *cobra.Command {
 		Use:   "generate",
 		Short: "Run full documentation generation",
 		RunE: runWithConfig(func(cmd *cobra.Command, cfg *configpkg.Config) error {
-			client := agentClientFactory()
-			if client == nil {
-				var err error
-				client, err = llm.NewClient(cfg.LLM)
-				if err != nil {
-					return err
-				}
+			client, err := resolveClient(agentClientFactory, cfg)
+			if err != nil {
+				return err
 			}
 			return runGenerate(cmd, cfg, client)
 		}),

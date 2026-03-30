@@ -105,7 +105,7 @@ func resolveInternalImportPath(repoPath string, modulePath string, importPath st
 	return filepath.ToSlash(relPath), nil
 }
 
-func BuildDepGraph(idx store.FileIndex) store.DepGraph {
+func buildDepGraph(idx store.FileIndex) store.DepGraph {
 	graph := store.DepGraph{}
 
 	filePaths := make([]string, 0, len(idx))
@@ -128,6 +128,22 @@ func BuildDepGraph(idx store.FileIndex) store.DepGraph {
 	}
 
 	return graph
+}
+
+func BuildDepGraph(idx store.FileIndex) store.DepGraph {
+	return buildDepGraph(idx)
+}
+
+type DepGraphBuilder struct {
+	idx store.FileIndex
+}
+
+func NewDepGraphBuilder(idx store.FileIndex) *DepGraphBuilder {
+	return &DepGraphBuilder{idx: idx}
+}
+
+func (b *DepGraphBuilder) Build() store.DepGraph {
+	return buildDepGraph(b.idx)
 }
 
 func ResolveImportPaths(repoPath string, cfg configpkg.AnalysisConfig, idx store.FileIndex) (store.FileIndex, error) {
