@@ -65,6 +65,7 @@ The skills defined here exist to enforce the repo's workflow contracts.
 
 Purpose:
 - adapt `superpowers:brainstorming` to wikismit's repo conventions
+- use "using-git-worktrees" to isolate implementation work in `.worktrees`
 - ensure approved design output lands in `.docs/spec`
 
 Scope:
