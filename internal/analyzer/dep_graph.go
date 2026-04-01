@@ -81,19 +81,51 @@ func (a *Analyzer) ensureModulePath(repoPath string) error {
 func (a *Analyzer) resolveImports(repoPath string, entry *store.FileEntry) error {
 	for idx := range entry.Imports {
 		imp := &entry.Imports[idx]
-		if !strings.HasPrefix(imp.Path, a.modulePath) {
+
+		matchedModulePath, matchedDir := a.findModuleForImport(imp.Path)
+		if matchedModulePath == "" {
 			continue
 		}
 
-		resolvedPath, err := resolveInternalImportPath(repoPath, a.modulePath, imp.Path)
+		moduleDir := filepath.Join(repoPath, matchedDir)
+		resolvedPath, err := resolveInternalImportPath(moduleDir, matchedModulePath, imp.Path)
 		if err != nil {
 			return err
 		}
+
+		if matchedDir != "" {
+			resolvedPath = filepath.ToSlash(filepath.Join(matchedDir, resolvedPath))
+		}
+
 		imp.Internal = true
 		imp.ResolvedPath = resolvedPath
 	}
 
 	return nil
+}
+
+func (a *Analyzer) findModuleForImport(importPath string) (string, string) {
+	longestModulePath := ""
+	longestModuleDir := ""
+	for modPath, dir := range a.workspaceModules {
+		if hasModulePathPrefix(importPath, modPath) && len(modPath) > len(longestModulePath) {
+			longestModulePath = modPath
+			longestModuleDir = dir
+		}
+	}
+	if longestModulePath != "" {
+		return longestModulePath, longestModuleDir
+	}
+
+	if a.modulePath != "" && hasModulePathPrefix(importPath, a.modulePath) {
+		return a.modulePath, ""
+	}
+
+	return "", ""
+}
+
+func hasModulePathPrefix(importPath string, modulePath string) bool {
+	return importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/")
 }
 
 func resolveInternalImportPath(repoPath string, modulePath string, importPath string) (string, error) {

@@ -5,9 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
@@ -262,4 +264,126 @@ func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {
 	if !bytes.Equal(firstDepGraph, secondDepGraph) {
 		t.Fatal("dep_graph.json changed between identical Phase 1 runs")
 	}
+}
+
+func TestAnalyzeIndexesAllWorkspaceSubModules(t *testing.T) {
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+
+	idx, err := analyzer.Analyze(repoPath)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+
+	wantFiles := []string{
+		"service-a/cmd/main.go",
+		"service-a/internal/handler/handler.go",
+		"shared/pkg/utils/utils.go",
+	}
+
+	for _, path := range wantFiles {
+		if _, ok := idx[path]; !ok {
+			t.Fatalf("FileIndex missing %q; got keys: %v", path, fileIndexKeys(idx))
+		}
+	}
+
+	if len(idx) != len(wantFiles) {
+		t.Fatalf("len(FileIndex) = %d, want %d; got keys: %v", len(idx), len(wantFiles), fileIndexKeys(idx))
+	}
+}
+
+func TestAnalyzeWorkspaceDepGraphContainsCrossModuleEdges(t *testing.T) {
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+
+	idx, err := analyzer.Analyze(repoPath)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+
+	graph := BuildDepGraph(idx)
+	handlerDeps, ok := graph["service-a/internal/handler/handler.go"]
+	if !ok {
+		t.Fatal("dep graph missing service-a/internal/handler/handler.go")
+	}
+
+	for _, dep := range handlerDeps {
+		if dep == "shared/pkg/utils/utils.go" {
+			return
+		}
+	}
+
+	t.Fatalf("handler deps = %v, want edge to shared/pkg/utils/utils.go", handlerDeps)
+}
+
+func TestRunPhase1HandlesWorkspaceRepo(t *testing.T) {
+	artifactsDir := t.TempDir()
+	cfg := &configpkg.Config{
+		RepoPath:     filepath.Join("..", "..", "testdata", "workspace_repo"),
+		ArtifactsDir: artifactsDir,
+		Analysis:     configpkg.AnalysisConfig{},
+	}
+
+	if err := RunPhase1(cfg); err != nil {
+		t.Fatalf("RunPhase1() error = %v", err)
+	}
+
+	fileIndexData, err := os.ReadFile(filepath.Join(artifactsDir, "file_index.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(file_index.json) error = %v", err)
+	}
+	if len(fileIndexData) == 0 {
+		t.Fatal("file_index.json is empty")
+	}
+
+	depGraphData, err := os.ReadFile(filepath.Join(artifactsDir, "dep_graph.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(dep_graph.json) error = %v", err)
+	}
+	if len(depGraphData) == 0 {
+		t.Fatal("dep_graph.json is empty")
+	}
+	if !bytes.Contains(depGraphData, []byte("shared/pkg/utils/utils.go")) {
+		t.Fatal("dep_graph.json missing cross-module reference to shared/pkg/utils/utils.go")
+	}
+}
+
+func TestAnalyzeWorkspaceIgnoresGoFilesOutsideWorkspaceModules(t *testing.T) {
+	src := filepath.Join("..", "..", "testdata", "workspace_repo")
+	repoPath := t.TempDir()
+	if err := copyDir(src, repoPath); err != nil {
+		t.Fatalf("copyDir(workspace_repo) error = %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(repoPath, "orphan.go"), []byte("package orphan\n\nfunc Orphan() {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(orphan.go) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(repoPath, "tools"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(tools) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoPath, "tools", "helper.go"), []byte("package tools\n\nfunc Helper() {}\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(tools/helper.go) error = %v", err)
+	}
+
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	idx, err := analyzer.Analyze(repoPath)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+
+	if _, ok := idx["orphan.go"]; ok {
+		t.Fatalf("FileIndex unexpectedly contains workspace-root file outside go.work use directives: %v", fileIndexKeys(idx))
+	}
+	if _, ok := idx["tools/helper.go"]; ok {
+		t.Fatalf("FileIndex unexpectedly contains non-workspace subdir file: %v", fileIndexKeys(idx))
+	}
+}
+
+func fileIndexKeys(idx store.FileIndex) []string {
+	keys := make([]string, 0, len(idx))
+	for key := range idx {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

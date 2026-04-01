@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
+
+	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func TestReadModulePathReturnsGoModModule(t *testing.T) {
@@ -263,5 +265,124 @@ func TestReadWorkspaceModulesRejectsEmptyUseDirectives(t *testing.T) {
 	_, err := readWorkspaceModules(tmpDir)
 	if err == nil {
 		t.Fatal("readWorkspaceModules() expected error for go.work with no use directives")
+	}
+}
+
+func TestResolveImportsMarksCrossModuleImportAsInternal(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	if err := analyzer.ensureModulePath(repoPath); err != nil {
+		t.Fatalf("ensureModulePath() error = %v", err)
+	}
+
+	entry := &store.FileEntry{
+		Imports: []store.Import{
+			{Path: "github.com/org/shared/pkg/utils"},
+		},
+	}
+
+	if err := analyzer.resolveImports(repoPath, entry); err != nil {
+		t.Fatalf("resolveImports() error = %v", err)
+	}
+
+	if !entry.Imports[0].Internal {
+		t.Fatalf("import %q should be marked internal (cross-module workspace)", entry.Imports[0].Path)
+	}
+
+	const wantResolved = "shared/pkg/utils/utils.go"
+	if entry.Imports[0].ResolvedPath != wantResolved {
+		t.Fatalf("ResolvedPath = %q, want %q", entry.Imports[0].ResolvedPath, wantResolved)
+	}
+}
+
+func TestResolveImportsSkipsExternalImportsInWorkspace(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	if err := analyzer.ensureModulePath(repoPath); err != nil {
+		t.Fatalf("ensureModulePath() error = %v", err)
+	}
+
+	entry := &store.FileEntry{
+		Imports: []store.Import{
+			{Path: "fmt"},
+			{Path: "github.com/external/something"},
+		},
+	}
+
+	if err := analyzer.resolveImports(repoPath, entry); err != nil {
+		t.Fatalf("resolveImports() error = %v", err)
+	}
+
+	for _, imp := range entry.Imports {
+		if imp.Internal {
+			t.Fatalf("import %q should remain external", imp.Path)
+		}
+		if imp.ResolvedPath != "" {
+			t.Fatalf("import %q should have empty resolved path", imp.Path)
+		}
+	}
+}
+
+func TestResolveImportPathsHandlesWorkspaceFixture(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	idx, err := analyzer.Analyze(repoPath)
+	if err != nil {
+		t.Fatalf("Analyze() error = %v", err)
+	}
+
+	resolved, err := ResolveImportPaths(repoPath, configpkg.AnalysisConfig{}, idx)
+	if err != nil {
+		t.Fatalf("ResolveImportPaths() error = %v", err)
+	}
+
+	handlerEntry, ok := resolved["service-a/internal/handler/handler.go"]
+	if !ok {
+		t.Fatal("resolved FileIndex missing service-a/internal/handler/handler.go")
+	}
+
+	for _, imp := range handlerEntry.Imports {
+		if imp.Path == "github.com/org/shared/pkg/utils" {
+			if !imp.Internal {
+				t.Fatal("cross-module import should be marked internal")
+			}
+			if imp.ResolvedPath != "shared/pkg/utils/utils.go" {
+				t.Fatalf("ResolvedPath = %q, want %q", imp.ResolvedPath, "shared/pkg/utils/utils.go")
+			}
+			return
+		}
+	}
+
+	t.Fatal("handler missing cross-module import to shared/pkg/utils")
+}
+
+func TestFindModuleForImportRequiresPathBoundary(t *testing.T) {
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	analyzer.workspaceModules = map[string]string{
+		"github.com/org/shared":       "shared",
+		"github.com/org/shared-utils": "shared-utils",
+	}
+
+	modulePath, moduleDir := analyzer.findModuleForImport("github.com/org/shared-utils/pkg/helper")
+	if modulePath != "github.com/org/shared-utils" {
+		t.Fatalf("modulePath = %q, want %q", modulePath, "github.com/org/shared-utils")
+	}
+	if moduleDir != "shared-utils" {
+		t.Fatalf("moduleDir = %q, want %q", moduleDir, "shared-utils")
+	}
+
+	modulePath, moduleDir = analyzer.findModuleForImport("github.com/org/sharedness/pkg/helper")
+	if modulePath != "" || moduleDir != "" {
+		t.Fatalf("unexpected match for non-boundary prefix: modulePath=%q moduleDir=%q", modulePath, moduleDir)
+	}
+
+	analyzer.workspaceModules = nil
+	analyzer.modulePath = "github.com/org/shared"
+	modulePath, moduleDir = analyzer.findModuleForImport("github.com/org/sharedness/pkg/helper")
+	if modulePath != "" || moduleDir != "" {
+		t.Fatalf("unexpected single-module match for non-boundary prefix: modulePath=%q moduleDir=%q", modulePath, moduleDir)
 	}
 }
