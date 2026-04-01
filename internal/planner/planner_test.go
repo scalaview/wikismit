@@ -279,7 +279,7 @@ func TestRunPlannerVerboseLoggingIncludesPromptSizingAndAttemptMetadataBeforeEac
 	idx := samplePlannerIndex()
 	graph := samplePlannerGraph()
 	buf := capturePlannerLogOutput(t, true)
-	skeleton := BuildFullSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
+	skeleton := BuildPlannerSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
 	expectedSkeletonTokens := estimateTokens(skeleton)
 	responses := []string{
 		`{"modules":[`,

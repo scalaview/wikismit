@@ -124,3 +124,85 @@ func BuildFullSkeleton(idx store.FileIndex, maxTokens int) string {
 	}
 	return BuildSkeleton(files, idx, maxTokens)
 }
+
+// BuildPlannerSkeleton produces a minimal skeleton for the Planner.
+// It outputs file paths, exported type names, and internal import relationships.
+// Function signatures are excluded, achieving ~70-80% compression vs BuildFullSkeleton.
+// Truncation is file-granular: entire files are included or skipped.
+func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
+	sortedFiles := make([]string, 0, len(idx))
+	for file := range idx {
+		sortedFiles = append(sortedFiles, file)
+	}
+	sort.Strings(sortedFiles)
+
+	var lines []string
+	chars := 0
+
+	for _, file := range sortedFiles {
+		entry, ok := idx[file]
+		if !ok {
+			continue
+		}
+
+		// Build all output lines for this file first
+		var fileLines []string
+		fileChars := 0
+
+		// File path header
+		header := fmt.Sprintf("// %s", file)
+		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, header)
+
+		// Exported type names (comma-separated on one line)
+		var typeNames []string
+		for _, typ := range entry.Types {
+			if typ.Exported {
+				typeNames = append(typeNames, typ.Name)
+			}
+		}
+		if len(typeNames) > 0 {
+			typeLine := fmt.Sprintf("  type %s", strings.Join(typeNames, ", "))
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, typeLine)
+		}
+
+		// Internal import relationships
+		var importPaths []string
+		for _, imp := range entry.Imports {
+			if imp.Internal && imp.ResolvedPath != "" {
+				importPaths = append(importPaths, imp.ResolvedPath)
+			}
+		}
+		if len(importPaths) > 0 {
+			importLine := fmt.Sprintf("  -> %s", strings.Join(importPaths, ", "))
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, importLine)
+		}
+
+		// Check token budget at file granularity
+		testChars := chars
+		wouldExceed := false
+		for _, l := range fileLines {
+			if estimatedTokensAfterAppend(testChars, l) > maxTokens {
+				wouldExceed = true
+				break
+			}
+			testChars += len(l)
+			if testChars > 0 {
+				testChars++
+			}
+		}
+
+		if wouldExceed {
+			if logger != nil {
+				logger.Warn("planner skeleton truncated", "file", file)
+			}
+			break
+		}
+
+		// Include entire file
+		for _, l := range fileLines {
+			lines, chars = appendLineWithCharCount(lines, chars, l)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
