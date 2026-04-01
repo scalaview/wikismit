@@ -132,6 +132,169 @@ func TestBuildFullSkeletonIncludesAllFilesWhenUnderBudget(t *testing.T) {
 	}
 }
 
+func plannerFileIndex() store.FileIndex {
+	return store.FileIndex{
+		"internal/auth/jwt.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "GenerateToken",
+				Signature: "func GenerateToken() string",
+				LineStart: 10,
+				Exported:  true,
+			}},
+			Types: []store.TypeDecl{{
+				Name:      "Claims",
+				Kind:      "struct",
+				LineStart: 2,
+				Exported:  true,
+			}},
+			Imports: []store.Import{{
+				Path:         "github.com/example/pkg/crypto",
+				Internal:     true,
+				ResolvedPath: "pkg/crypto/hash.go",
+			}},
+		},
+		"internal/auth/middleware.go": {
+			Functions: []store.FunctionDecl{{
+				Name:      "Middleware",
+				Signature: "func Middleware()",
+				LineStart: 5,
+				Exported:  true,
+			}},
+			Types: []store.TypeDecl{{
+				Name:      "Handler",
+				Kind:      "interface",
+				LineStart: 3,
+				Exported:  true,
+			}},
+			Imports: []store.Import{{
+				Path:         "github.com/example/internal/auth",
+				Internal:     true,
+				ResolvedPath: "internal/auth/jwt.go",
+			}},
+		},
+		"pkg/crypto/hash.go": {
+			Types: []store.TypeDecl{{
+				Name:      "Hasher",
+				Kind:      "interface",
+				LineStart: 5,
+				Exported:  true,
+			}},
+			Imports: []store.Import{{
+				Path:     "crypto/sha256",
+				Internal: false,
+			}},
+		},
+		"internal/util/empty.go": {},
+	}
+}
+
+func TestBuildPlannerSkeletonOutputsFilePathTypesAndImports(t *testing.T) {
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeleton(idx, 10_000)
+
+	// File path headers
+	if !strings.Contains(got, "// internal/auth/jwt.go") {
+		t.Fatalf("missing jwt.go file header:\n%s", got)
+	}
+	if !strings.Contains(got, "// internal/auth/middleware.go") {
+		t.Fatalf("missing middleware.go file header:\n%s", got)
+	}
+	// Exported type names
+	if !strings.Contains(got, "type Claims") {
+		t.Fatalf("missing Claims type:\n%s", got)
+	}
+	if !strings.Contains(got, "type Handler") {
+		t.Fatalf("missing Handler type:\n%s", got)
+	}
+	// Internal import relationships
+	if !strings.Contains(got, "-> pkg/crypto/hash.go") {
+		t.Fatalf("missing internal import for jwt.go:\n%s", got)
+	}
+	if !strings.Contains(got, "-> internal/auth/jwt.go") {
+		t.Fatalf("missing internal import for middleware.go:\n%s", got)
+	}
+}
+
+func TestBuildPlannerSkeletonExcludesFunctionSignatures(t *testing.T) {
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeleton(idx, 10_000)
+
+	if strings.Contains(got, "GenerateToken") {
+		t.Fatalf("should not contain function names, got:\n%s", got)
+	}
+	if strings.Contains(got, "Middleware") {
+		t.Fatalf("should not contain function names, got:\n%s", got)
+	}
+	if strings.Contains(got, "func ") {
+		t.Fatalf("should not contain any func keyword, got:\n%s", got)
+	}
+}
+
+func TestBuildPlannerSkeletonTruncatesAtFileGranularity(t *testing.T) {
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeleton(idx, 10)
+
+	// Must stay within token budget
+	if estimateTokens(got) > 10 {
+		t.Fatalf("estimateTokens() = %d, want <= 10\n%s", estimateTokens(got), got)
+	}
+
+	// If a file appears, its content must be complete (no partial truncation)
+	if strings.Contains(got, "// internal/auth/jwt.go") {
+		if !strings.Contains(got, "type Claims") {
+			t.Fatalf("jwt.go header present but type line missing (partial file):\n%s", got)
+		}
+		if !strings.Contains(got, "-> pkg/crypto/hash.go") {
+			t.Fatalf("jwt.go header present but import line missing (partial file):\n%s", got)
+		}
+	}
+}
+
+func TestBuildPlannerSkeletonIncludesEmptyFilesAsPlaceholder(t *testing.T) {
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeleton(idx, 10_000)
+
+	if !strings.Contains(got, "// internal/util/empty.go") {
+		t.Fatalf("empty file should appear as placeholder:\n%s", got)
+	}
+	// Ensure no type or import lines after empty file header
+	lines := strings.Split(got, "\n")
+	for i, line := range lines {
+		if line == "// internal/util/empty.go" {
+			// Next line should not be indented (no type or import)
+			if i+1 < len(lines) && (strings.HasPrefix(lines[i+1], "  type") || strings.HasPrefix(lines[i+1], "  ->")) {
+				t.Fatalf("empty file should have no type/import lines:\n%s", got)
+			}
+			return
+		}
+	}
+}
+
+func TestBuildPlannerSkeletonIgnoresExternalImports(t *testing.T) {
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeleton(idx, 10_000)
+
+	// pkg/crypto/hash.go has only external imports (crypto/sha256)
+	// It should NOT show any -> line
+	lines := strings.Split(got, "\n")
+	for i, line := range lines {
+		if line == "// pkg/crypto/hash.go" {
+			if i+1 < len(lines) {
+				next := lines[i+1]
+				if strings.HasPrefix(next, "  ->") {
+					t.Fatalf("external import should not appear in -> line:\n%s", got)
+				}
+			}
+			return
+		}
+	}
+}
+
 func TestBuildFullSkeletonUsesSameExportedFirstTruncationRule(t *testing.T) {
 	idx := samplePlannerFileIndex()
 
