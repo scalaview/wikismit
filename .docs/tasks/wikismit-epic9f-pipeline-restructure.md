@@ -1,13 +1,13 @@
 # wikismit — Epic 9E: Pipeline Restructure
 
 **Status:** `todo`
-**Depends on:** Epic 9D
+**Depends on:** Epic 9F
 **Goal:** Introduce `Pipeline` struct to replace seven global function variables, define domain interfaces for core components, and encapsulate agent orchestration. This is the largest refactoring effort — only undertake after localized objectization is proven stable.
 **Spec refs:** code-review-oop-refactoring.md §4.1 A-F, §7, code-review-improvement.md §2.3
 
 ---
 
-## S9E.1 — Define Domain Interfaces
+## S9F.1 — Define Domain Interfaces
 
 **Status:** `todo`
 
@@ -29,18 +29,18 @@ internal/interfaces/interfaces.go (new file)
 
 ### Subtasks
 
-#### S9E.1.1 — Create Interfaces Package
+#### S9F.1.1 — Create Interfaces Package
 Legacy - Create `internal/interfaces/` package
 - Define `CodeAnalyzer`, `PlannerService`, `PreprocessorService`, `AgentRunner`, `ComposerService` interfaces
 - Keep interfaces minimal — only methods actually called by pipeline
 
-#### S9E.1.2 — Verify Interface Compatibility
+#### S9F.1.2 — Verify Interface Compatibility
 Legacy - Verify that existing struct implementations (from Epic 9D) satisfy the new interfaces
 - Add compile-time checks if needed
 
 ---
 
-## S9E.2 — Pipeline Struct
+## S9F.2 — Pipeline Struct
 
 **Status:** `todo`
 
@@ -64,34 +64,34 @@ internal/pipeline/incremental_test.go
 
 ### Subtasks
 
-#### S9E.2.1 — Add Pipeline Struct Tests
+#### S9F.2.1 — Add Pipeline Struct Tests
 Legacy - Add tests for `Pipeline.RunFull` that use mock collaborators
 - Add tests for `Pipeline.RunIncremental` that use mock collaborators
 - Replicate existing test coverage using struct methods instead of global variable overrides
 
-#### S9E.2.2 — Introduce `Pipeline` Struct
+#### S9F.2.2 — Introduce `Pipeline` Struct
 Legacy - Create `Pipeline` struct with injected collaborators (analyzer, planner, preprocessor, agentRunner, composer)
 - Implement `RunFull` and `RunIncremental` as methods
 - Replace global variable calls with struct field calls
 
-#### S9E.2.3 — Migrate Tests from Global Vars to Struct
+#### S9F.2.3 — Migrate Tests from Global Vars to Struct
 Legacy - Convert existing tests from overriding global vars to injecting mocks into struct
 - Ensure same test coverage is maintained
 - Remove global variable test seam pattern
 
-#### S9E.2.4 — Keep Backward-Compatible Function Entrypoints
+#### S9F.2.4 — Keep Backward-Compatible Function Entrypoints
 Legacy - `RunFullGenerate` creates a default `Pipeline` and calls `RunFull`
 - `RunIncremental` creates a default `Pipeline` and calls `RunIncremental`
 - `IncrementalOptions` preserved
 
-#### S9E.2.5 — Verify Pipeline Regression
+#### S9F.2.5 — Verify Pipeline Regression
 Legacy - Run `go test ./internal/pipeline -v`
 - Run `go test ./cmd/wikismit -v`
 - Verify `generate` and `update` commands still work end-to-end
 
 ---
 
-## S9E.3 — Agent Orchestrator Struct
+## S9F.3 — Agent Orchestrator Struct
 
 **Status:** `todo`
 
@@ -115,26 +115,26 @@ internal/agent/scheduler_test.go
 
 ### Subtasks
 
-#### S9E.3.1 — Add Agent Orchestrator Tests
+#### S9F.3.1 — Add Agent Orchestrator Tests
 Legacy - Add tests for `AgentOrchestrator` with mock client
 - Test concurrency behavior is preserved
 
-#### S9E.3.2 — Introduce `AgentOrchestrator` Struct
+#### S9F.3.2 — Introduce `AgentOrchestrator` Struct
 Legacy - Create struct with client, artifactsDir, concurrency, logger fields
 - Move `Run` and `RunFor` logic to methods
 - Extract `runAgent` into a per-module execution method
 
-#### S9E.3.3 — Preserve Backward-Compatible Entrypoints
+#### S9F.3.3 — Preserve Backward-Compatible Entrypoints
 Legacy - `agent.Run` creates default orchestrator and delegates
 - `agent.RunFor` creates default orchestrator and delegates
 
-#### S9E.3.4 — Verify Agent Regression
+#### S9F.3.4 — Verify Agent Regression
 Legacy - Run `go test ./internal/agent -v`
 - Verify concurrent execution still works correctly
 
 ---
 
-## S9E.4 — Final Verification
+## S9F.4 — Final Verification
 
 **Status:** `todo`
 
