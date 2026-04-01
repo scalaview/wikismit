@@ -29,14 +29,12 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 
 	parseErrors := make([]string, 0, 3)
 	for attempt := range 3 {
-		if cfg.Verbose {
-			plannerLogger.Debug("starting planner completion request",
-				"skeleton_token_estimate", estimateTokens(skeleton),
-				"prompt_length", len(prompt),
-				"planner_attempt", attempt+1,
-				"model", cfg.LLM.PlannerModel,
-			)
-		}
+		plannerLogger.Debug("starting planner completion request",
+			"skeleton_token_estimate", estimateTokens(skeleton),
+			"prompt_length", len(prompt),
+			"planner_attempt", attempt+1,
+			"model", cfg.LLM.PlannerModel,
+		)
 		response, err := client.Complete(ctx, llm.CompletionRequest{
 			Model:       cfg.LLM.PlannerModel,
 			UserMsg:     prompt,
