@@ -116,3 +116,29 @@ func TestValidateDocsHandlesEmptyDocsDirectory(t *testing.T) {
 		t.Fatalf("GeneratedAt = %v, want recent timestamp", report.GeneratedAt)
 	}
 }
+
+func TestValidateDocsReportsCorrectLineNumber(t *testing.T) {
+	docsDir := t.TempDir()
+
+	content := `# Header
+
+This is line 2
+See [Broken Link](missing.md) on line 3
+This is line 4
+`
+	if err := os.WriteFile(filepath.Join(docsDir, "test.md"), []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile(test.md) error = %v", err)
+	}
+
+	report, err := ValidateDocs(docsDir)
+	if err != nil {
+		t.Fatalf("ValidateDocs() error = %v", err)
+	}
+
+	if len(report.BrokenLinks) != 1 {
+		t.Fatalf("len(BrokenLinks) = %d, want 1", len(report.BrokenLinks))
+	}
+	if report.BrokenLinks[0].Line != 4 {
+		t.Fatalf("Line = %d, want 4 (1-based line number)", report.BrokenLinks[0].Line)
+	}
+}
