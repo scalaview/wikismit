@@ -11,10 +11,11 @@ import (
 )
 
 type Analyzer struct {
-	registry        map[string]LanguageParser
-	excludePatterns []string
-	modulePath      string
-	skippedFiles    int
+	registry         map[string]LanguageParser
+	excludePatterns  []string
+	modulePath       string
+	workspaceModules map[string]string // modulePath → relative dir from workspace root
+	skippedFiles     int
 }
 
 func NewAnalyzer(cfg configpkg.AnalysisConfig) *Analyzer {
@@ -31,7 +32,41 @@ func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 		return nil, err
 	}
 
-	err := filepath.WalkDir(repoPath, func(path string, d fs.DirEntry, err error) error {
+	if len(a.workspaceModules) > 0 {
+		moduleDirs := make([]string, 0, len(a.workspaceModules))
+		seenDirs := make(map[string]bool, len(a.workspaceModules))
+		for _, moduleDir := range a.workspaceModules {
+			if seenDirs[moduleDir] {
+				continue
+			}
+			seenDirs[moduleDir] = true
+			moduleDirs = append(moduleDirs, moduleDir)
+		}
+		for _, moduleDir := range moduleDirs {
+			if err := a.walkRepoDir(repoPath, filepath.Join(repoPath, moduleDir), idx); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if err := a.walkRepoDir(repoPath, repoPath, idx); err != nil {
+			return nil, err
+		}
+	}
+
+	for path, entry := range idx {
+		entryCopy := entry
+		entryCopy.Imports = append([]store.Import(nil), entry.Imports...)
+		if err := a.resolveImports(repoPath, &entryCopy); err != nil {
+			return nil, err
+		}
+		idx[path] = entryCopy
+	}
+
+	return idx, nil
+}
+
+func (a *Analyzer) walkRepoDir(repoPath string, rootPath string, idx store.FileIndex) error {
+	return filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -64,18 +99,10 @@ func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 			a.skippedFiles++
 			return nil
 		}
-		if resolveErr := a.resolveImports(repoPath, &entry); resolveErr != nil {
-			return resolveErr
-		}
 
 		idx[relPath] = entry
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return idx, nil
 }
 
 func (a *Analyzer) isExcluded(relPath string) bool {

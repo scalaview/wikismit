@@ -30,8 +30,43 @@ func readModulePath(repoPath string) (string, error) {
 	return file.Module.Mod.Path, nil
 }
 
+func readWorkspaceModules(repoPath string) (map[string]string, error) {
+	data, err := os.ReadFile(filepath.Join(repoPath, "go.work"))
+	if err != nil {
+		return nil, fmt.Errorf("reading go.work: %w", err)
+	}
+
+	workFile, err := modfile.ParseWork("go.work", data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("parsing go.work: %w", err)
+	}
+
+	modules := make(map[string]string)
+	for _, use := range workFile.Use {
+		subDir := strings.TrimPrefix(use.Path, "./")
+		subModPath := filepath.Join(repoPath, subDir)
+		modulePath, modErr := readModulePath(subModPath)
+		if modErr != nil {
+			return nil, fmt.Errorf("reading module in %s: %w", subDir, modErr)
+		}
+		modules[modulePath] = subDir
+	}
+
+	if len(modules) == 0 {
+		return nil, fmt.Errorf("go.work has no use directives")
+	}
+
+	return modules, nil
+}
+
 func (a *Analyzer) ensureModulePath(repoPath string) error {
-	if a.modulePath != "" {
+	if a.modulePath != "" || len(a.workspaceModules) > 0 {
+		return nil
+	}
+
+	modules, err := readWorkspaceModules(repoPath)
+	if err == nil {
+		a.workspaceModules = modules
 		return nil
 	}
 
@@ -46,19 +81,51 @@ func (a *Analyzer) ensureModulePath(repoPath string) error {
 func (a *Analyzer) resolveImports(repoPath string, entry *store.FileEntry) error {
 	for idx := range entry.Imports {
 		imp := &entry.Imports[idx]
-		if !strings.HasPrefix(imp.Path, a.modulePath) {
+
+		matchedModulePath, matchedDir := a.findModuleForImport(imp.Path)
+		if matchedModulePath == "" {
 			continue
 		}
 
-		resolvedPath, err := resolveInternalImportPath(repoPath, a.modulePath, imp.Path)
+		moduleDir := filepath.Join(repoPath, matchedDir)
+		resolvedPath, err := resolveInternalImportPath(moduleDir, matchedModulePath, imp.Path)
 		if err != nil {
 			return err
 		}
+
+		if matchedDir != "" {
+			resolvedPath = filepath.ToSlash(filepath.Join(matchedDir, resolvedPath))
+		}
+
 		imp.Internal = true
 		imp.ResolvedPath = resolvedPath
 	}
 
 	return nil
+}
+
+func (a *Analyzer) findModuleForImport(importPath string) (string, string) {
+	longestModulePath := ""
+	longestModuleDir := ""
+	for modPath, dir := range a.workspaceModules {
+		if hasModulePathPrefix(importPath, modPath) && len(modPath) > len(longestModulePath) {
+			longestModulePath = modPath
+			longestModuleDir = dir
+		}
+	}
+	if longestModulePath != "" {
+		return longestModulePath, longestModuleDir
+	}
+
+	if a.modulePath != "" && hasModulePathPrefix(importPath, a.modulePath) {
+		return a.modulePath, ""
+	}
+
+	return "", ""
+}
+
+func hasModulePathPrefix(importPath string, modulePath string) bool {
+	return importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/")
 }
 
 func resolveInternalImportPath(repoPath string, modulePath string, importPath string) (string, error) {

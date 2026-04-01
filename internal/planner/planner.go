@@ -24,7 +24,7 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 		}()
 	}
 
-	skeleton := BuildFullSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
+	skeleton := BuildPlannerSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
 	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
 
 	parseErrors := make([]string, 0, 3)
