@@ -127,6 +127,7 @@ Out of scope:
 ### 6.3 Plans
 
 - location: `.docs/plans/`
+- use git worktree to isolate implementation work. location: `.worktrees`
 - derived from one specific epic
 - should include detailed implementation steps and testcases
 - should be specific enough that implementation can be executed later without rediscovering scope
