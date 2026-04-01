@@ -285,3 +285,87 @@ func (l *bufferLogger) Warn(msg string, fields ...any) {
 func (l *bufferLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
+
+func TestClientCompleteAccumulatesMultipleContinuations(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		requestCount++
+		if requestCount <= 3 {
+			// First 3 requests return length truncation
+			fmt.Fprint(w, `{"choices":[{"message":{"content":"part`+fmt.Sprint(requestCount)+`"},"finish_reason":"length"}]}`)
+		} else {
+			// Fourth request completes normally
+			fmt.Fprint(w, `{"choices":[{"message":{"content":"final"},"finish_reason":"stop"}]}`)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(configpkg.LLMConfig{
+		BaseURL:        server.URL,
+		AgentModel:     "gpt-4o",
+		TimeoutSeconds: 1,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	got, err := client.Complete(context.Background(), CompletionRequest{
+		SystemMsg:   "system",
+		UserMsg:     "user",
+		MaxTokens:   100,
+		Temperature: 0.2,
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	want := "part1part2part3final"
+	if got != want {
+		t.Fatalf("Complete() = %q, want %q", got, want)
+	}
+}
+
+func TestClientCompleteCapsContinuationsAtFiveAndLogsWarning(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		requestCount++
+		// Always return length truncation (simulates endless continuation loop)
+		fmt.Fprint(w, `{"choices":[{"message":{"content":"part`+fmt.Sprint(requestCount)+`"},"finish_reason":"length"}]}`)
+	}))
+	defer server.Close()
+
+	buf := &bytes.Buffer{}
+	client := newClientWithTestLogger(t, configpkg.LLMConfig{
+		BaseURL:        server.URL,
+		AgentModel:     "gpt-4o",
+		TimeoutSeconds: 1,
+	}, true, buf)
+
+	got, err := client.Complete(context.Background(), CompletionRequest{
+		SystemMsg:   "system",
+		UserMsg:     "user",
+		MaxTokens:   100,
+		Temperature: 0.2,
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	// Should have exactly 5 parts (5 iterations)
+	want := "part1part2part3part4part5"
+	if got != want {
+		t.Fatalf("Complete() = %q, want %q", got, want)
+	}
+
+	// Should have made exactly 5 requests
+	if requestCount != 5 {
+		t.Fatalf("server received %d requests, want 5", requestCount)
+	}
+
+	// Log should contain a warning about reaching the continuation limit
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "level=WARN") || !strings.Contains(logOutput, "continuation limit") {
+		t.Fatalf("log output should contain warning about continuation limit, got %q", logOutput)
+	}
+}

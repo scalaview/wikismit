@@ -59,6 +59,8 @@ func newClient(cfg configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
 	}, nil
 }
 
+const maxContinuations = 5
+
 func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (string, error) {
 	requestCtx := ctx
 	var cancel context.CancelFunc
@@ -70,7 +72,7 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 	var preoutput string
 	var builder strings.Builder
 
-	for true {
+	for i := 0; i < maxContinuations; i++ {
 		resp, err := c.complete(requestCtx, &req, preoutput)
 		if err != nil {
 			return "", err
@@ -84,9 +86,10 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 		}
 
 		builder.WriteString(resp.Message.Content)
-		break
+		return builder.String(), nil
 	}
 
+	c.logger.Warn("reached maximum continuation limit", "limit", maxContinuations)
 	return builder.String(), nil
 }
 

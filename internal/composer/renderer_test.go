@@ -120,14 +120,14 @@ func TestCopyModuleDocsAppliesCitationsAndTOCBeforeWriting(t *testing.T) {
 
 func TestGenerateIndexPageListsModulesByDependencyDepth(t *testing.T) {
 	plan := &store.NavPlan{Modules: []store.Module{
-		{ID: "api", Shared: false},
-		{ID: "auth", Shared: false},
-		{ID: "db", Shared: false},
+		{ID: "api", Shared: false, Files: []string{"api/handler.go"}},
+		{ID: "auth", Shared: false, Files: []string{"auth/jwt.go"}},
+		{ID: "db", Shared: false, Files: []string{"db/conn.go"}},
 	}}
 	graph := store.DepGraph{
-		"api":  {"auth", "db"},
-		"auth": {"db"},
-		"db":   nil,
+		"api/handler.go": {"auth/jwt.go", "db/conn.go"},
+		"auth/jwt.go":    {"db/conn.go"},
+		"db/conn.go":     nil,
 	}
 
 	result := GenerateIndexPage(plan, graph)
@@ -140,6 +140,35 @@ func TestGenerateIndexPageListsModulesByDependencyDepth(t *testing.T) {
 	}
 	if !(dbIndex < authIndex && authIndex < apiIndex) {
 		t.Fatalf("modules not ordered shallowest-first by dependency depth:\n%s", result)
+	}
+}
+
+func TestGenerateIndexPageWithFileGraphBuildsModuleLevelGraph(t *testing.T) {
+	plan := &store.NavPlan{Modules: []store.Module{
+		{ID: "api", Shared: false, Files: []string{"internal/api/server.go", "internal/api/routes.go"}},
+		{ID: "auth", Shared: false, Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}},
+		{ID: "db", Shared: false, Files: []string{"internal/db/connection.go"}},
+	}}
+	// Realistic file-level graph with file paths as keys (not module IDs)
+	graph := store.DepGraph{
+		"internal/api/server.go":      {"internal/auth/jwt.go", "internal/db/connection.go"},
+		"internal/api/routes.go":      {"internal/auth/middleware.go"},
+		"internal/auth/jwt.go":        {"internal/db/connection.go"},
+		"internal/auth/middleware.go": {},
+		"internal/db/connection.go":   {},
+	}
+
+	result := GenerateIndexPage(plan, graph)
+
+	apiIndex := strings.Index(result, "| api |")
+	authIndex := strings.Index(result, "| auth |")
+	dbIndex := strings.Index(result, "| db |")
+	if apiIndex == -1 || authIndex == -1 || dbIndex == -1 {
+		t.Fatalf("result missing module rows:\n%s", result)
+	}
+	// Should order: db (depth 0), auth (depth 1, depends on db), api (depth 2, depends on auth)
+	if !(dbIndex < authIndex && authIndex < apiIndex) {
+		t.Fatalf("modules not ordered by module dependency depth when graph uses file paths as keys:\n%s\nGot order: db=%d, auth=%d, api=%d", result, dbIndex, authIndex, apiIndex)
 	}
 }
 

@@ -12,6 +12,16 @@ import (
 
 var markdownLinkRegex = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 
+func lineNumber(content []byte, offset int) int {
+	line := 1
+	for i := 0; i < offset && i < len(content); i++ {
+		if content[i] == '\n' {
+			line++
+		}
+	}
+	return line
+}
+
 func ValidateDocs(docsDir string) (store.ValidationReport, error) {
 	report := store.ValidationReport{GeneratedAt: time.Now().UTC()}
 
@@ -50,7 +60,7 @@ func ValidateDocs(docsDir string) (store.ValidationReport, error) {
 				SourceFile: path,
 				LinkText:   linkText,
 				LinkTarget: target,
-				Line:       0,
+				Line:       lineNumber(content, match[0]),
 			})
 		}
 
