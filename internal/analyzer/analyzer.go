@@ -11,10 +11,11 @@ import (
 )
 
 type Analyzer struct {
-	registry        map[string]LanguageParser
-	excludePatterns []string
-	modulePath      string
-	skippedFiles    int
+	registry         map[string]LanguageParser
+	excludePatterns  []string
+	modulePath       string
+	workspaceModules map[string]string // modulePath → relative dir from workspace root
+	skippedFiles     int
 }
 
 func NewAnalyzer(cfg configpkg.AnalysisConfig) *Analyzer {

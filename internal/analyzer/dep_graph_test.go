@@ -180,3 +180,88 @@ func TestResolveInternalImportsHandlesModuleRootImport(t *testing.T) {
 		t.Fatalf("resolveInternalImportPath(subpackage) = %q, want %q", resolved, "internal/api/handler.go")
 	}
 }
+
+func TestReadWorkspaceModulesParsesGoWork(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+
+	modules, err := readWorkspaceModules(repoPath)
+	if err != nil {
+		t.Fatalf("readWorkspaceModules() error = %v", err)
+	}
+
+	if len(modules) != 2 {
+		t.Fatalf("len(modules) = %d, want 2", len(modules))
+	}
+
+	if dir, ok := modules["github.com/org/service-a"]; !ok {
+		t.Fatal("missing module github.com/org/service-a")
+	} else if dir != "service-a" {
+		t.Fatalf("service-a dir = %q, want %q", dir, "service-a")
+	}
+
+	if dir, ok := modules["github.com/org/shared"]; !ok {
+		t.Fatal("missing module github.com/org/shared")
+	} else if dir != "shared" {
+		t.Fatalf("shared dir = %q, want %q", dir, "shared")
+	}
+}
+
+func TestReadWorkspaceModulesReturnsErrorWithoutGoWork(t *testing.T) {
+	tmpDir := t.TempDir()
+	_, err := readWorkspaceModules(tmpDir)
+	if err == nil {
+		t.Fatal("readWorkspaceModules() expected error for directory without go.work")
+	}
+}
+
+func TestEnsureModulePathDetectsWorkspace(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	if err := analyzer.ensureModulePath(repoPath); err != nil {
+		t.Fatalf("ensureModulePath() error = %v", err)
+	}
+
+	if len(analyzer.workspaceModules) != 2 {
+		t.Fatalf("workspaceModules len = %d, want 2", len(analyzer.workspaceModules))
+	}
+}
+
+func TestEnsureModulePathFallsBackToGoMod(t *testing.T) {
+	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	if err := analyzer.ensureModulePath(repoPath); err != nil {
+		t.Fatalf("ensureModulePath() error = %v", err)
+	}
+
+	if analyzer.modulePath != "github.com/wikismit/sample" {
+		t.Fatalf("modulePath = %q, want %q", analyzer.modulePath, "github.com/wikismit/sample")
+	}
+	if len(analyzer.workspaceModules) != 0 {
+		t.Fatalf("workspaceModules len = %d, want 0 for single-module project", len(analyzer.workspaceModules))
+	}
+}
+
+func TestEnsureModulePathReturnsErrorWithoutGoModOrGoWork(t *testing.T) {
+	tmpDir := t.TempDir()
+	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+
+	err := analyzer.ensureModulePath(tmpDir)
+	if err == nil {
+		t.Fatal("ensureModulePath() expected error for directory without go.mod or go.work")
+	}
+}
+
+func TestReadWorkspaceModulesRejectsEmptyUseDirectives(t *testing.T) {
+	tmpDir := t.TempDir()
+	goWorkContent := "go 1.25.0\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.work"), []byte(goWorkContent), 0o644); err != nil {
+		t.Fatalf("WriteFile(go.work) error = %v", err)
+	}
+
+	_, err := readWorkspaceModules(tmpDir)
+	if err == nil {
+		t.Fatal("readWorkspaceModules() expected error for go.work with no use directives")
+	}
+}

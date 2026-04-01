@@ -30,8 +30,43 @@ func readModulePath(repoPath string) (string, error) {
 	return file.Module.Mod.Path, nil
 }
 
+func readWorkspaceModules(repoPath string) (map[string]string, error) {
+	data, err := os.ReadFile(filepath.Join(repoPath, "go.work"))
+	if err != nil {
+		return nil, fmt.Errorf("reading go.work: %w", err)
+	}
+
+	workFile, err := modfile.ParseWork("go.work", data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("parsing go.work: %w", err)
+	}
+
+	modules := make(map[string]string)
+	for _, use := range workFile.Use {
+		subDir := strings.TrimPrefix(use.Path, "./")
+		subModPath := filepath.Join(repoPath, subDir)
+		modulePath, modErr := readModulePath(subModPath)
+		if modErr != nil {
+			return nil, fmt.Errorf("reading module in %s: %w", subDir, modErr)
+		}
+		modules[modulePath] = subDir
+	}
+
+	if len(modules) == 0 {
+		return nil, fmt.Errorf("go.work has no use directives")
+	}
+
+	return modules, nil
+}
+
 func (a *Analyzer) ensureModulePath(repoPath string) error {
-	if a.modulePath != "" {
+	if a.modulePath != "" || len(a.workspaceModules) > 0 {
+		return nil
+	}
+
+	modules, err := readWorkspaceModules(repoPath)
+	if err == nil {
+		a.workspaceModules = modules
 		return nil
 	}
 
