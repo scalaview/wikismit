@@ -86,10 +86,11 @@ func CopyModuleDocs(artifactsDir string, docsDir string, plan *store.NavPlan, sy
 }
 
 func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
+	moduleGraph := buildModuleGraph(plan, graph)
 	modules := append([]store.Module(nil), plan.Modules...)
 	sort.Slice(modules, func(i int, j int) bool {
-		leftDepth := dependencyDepth(modules[i].ID, graph, map[string]bool{})
-		rightDepth := dependencyDepth(modules[j].ID, graph, map[string]bool{})
+		leftDepth := dependencyDepth(modules[i].ID, moduleGraph, map[string]bool{})
+		rightDepth := dependencyDepth(modules[j].ID, moduleGraph, map[string]bool{})
 		if leftDepth != rightDepth {
 			return leftDepth < rightDepth
 		}
@@ -113,6 +114,34 @@ func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
 	}
 
 	return builder.String()
+}
+
+func buildModuleGraph(plan *store.NavPlan, fileGraph store.DepGraph) map[string][]string {
+	fileToModule := make(map[string]string)
+	for _, module := range plan.Modules {
+		for _, file := range module.Files {
+			fileToModule[file] = module.ID
+		}
+	}
+
+	moduleGraph := make(map[string][]string)
+	for _, module := range plan.Modules {
+		moduleDeps := make(map[string]bool)
+		for _, file := range module.Files {
+			for _, depFile := range fileGraph[file] {
+				if depModule, ok := fileToModule[depFile]; ok && depModule != module.ID {
+					moduleDeps[depModule] = true
+				}
+			}
+		}
+		deps := make([]string, 0, len(moduleDeps))
+		for dep := range moduleDeps {
+			deps = append(deps, dep)
+		}
+		moduleGraph[module.ID] = deps
+	}
+
+	return moduleGraph
 }
 
 func dependencyDepth(moduleID string, graph store.DepGraph, seen map[string]bool) int {
