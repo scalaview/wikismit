@@ -37,6 +37,12 @@ export default defineConfig({
 {{- end }}
     sidebar: [
       {
+        text: 'Architecture',
+        items: [
+          { text: 'Overview', link: '/architecture.md' },
+        ],
+      },
+      {
         text: 'Modules',
         items: [
 {{- range .Modules }}

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/scalaview/wikismit/internal/agent"
@@ -71,7 +72,13 @@ func RunFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 		return err
 	}
 	if err := runLoggedFallbackPhase(logger, "agent", func() error {
-		return agent.RunFor(ctx, plan.Modules, agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency)
+		return agent.RunFor(ctx, plan.Modules, agent.AgentInput{
+			FileIndex:         idx,
+			SharedContext:     sharedCtx,
+			Config:           cfg,
+			ArchSummary:       plan.ArchitectureSummary,
+			NeighborSummaries: buildNeighborSummaries(plan),
+		}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency)
 	}); err != nil {
 		return err
 	}
@@ -192,4 +199,16 @@ func reanalyzeChanged(changes []gitdiff.FileChange, idx store.FileIndex, cfg *co
 	}
 
 	return next, nil
+}
+
+func buildNeighborSummaries(plan *store.NavPlan) map[string]string {
+	summaries := make(map[string]string, len(plan.Modules))
+	for _, m := range plan.Modules {
+		role := "module"
+		if m.Shared {
+			role = "shared"
+		}
+		summaries[m.ID] = fmt.Sprintf("%s (%s, %d files)", m.ID, role, len(m.Files))
+	}
+	return summaries
 }

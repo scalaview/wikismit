@@ -244,6 +244,91 @@ func TestRunComposerCreatesModuleAndSharedDirectories(t *testing.T) {
 	}
 }
 
+func TestGenerateArchitecturePageIncludesPurposeWhenSummaryPresent(t *testing.T) {
+	plan := &store.NavPlan{
+		ArchitectureSummary: &store.ArchSummary{
+			Purpose:  "Authentication service",
+			Layers:   []string{"API", "Logic", "Data"},
+			DataFlow: "Request -> Handler -> Store",
+		},
+		Modules: []store.Module{
+			{ID: "auth", Shared: false, Files: []string{"auth/jwt.go"}},
+			{ID: "store", Shared: false, Files: []string{"store/db.go"}},
+		},
+	}
+	graph := store.DepGraph{"auth/jwt.go": {"store/db.go"}}
+
+	got := GenerateArchitecturePage(plan, graph)
+
+	for _, want := range []string{
+		"# Architecture Overview",
+		"**Purpose:** Authentication service",
+		"## Layers",
+		"1. API",
+		"2. Logic",
+		"3. Data",
+		"## Data Flow",
+		"Request -> Handler -> Store",
+		"```mermaid",
+		"graph TD",
+		"auth --> store",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestGenerateArchitecturePageGracefulWhenSummaryNil(t *testing.T) {
+	plan := &store.NavPlan{
+		Modules: []store.Module{
+			{ID: "auth", Shared: false, Files: []string{"auth/jwt.go"}},
+		},
+	}
+
+	got := GenerateArchitecturePage(plan, store.DepGraph{})
+
+	if !strings.Contains(got, "# Architecture Overview") {
+		t.Fatalf("missing heading:\n%s", got)
+	}
+	if strings.Contains(got, "**Purpose:**") {
+		t.Fatalf("should not include purpose when summary is nil:\n%s", got)
+	}
+	if !strings.Contains(got, "```mermaid") {
+		t.Fatalf("should still include mermaid graph:\n%s", got)
+	}
+}
+
+func TestRunComposerWritesArchitecturePage(t *testing.T) {
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	moduleDocsDir := filepath.Join(artifactsDir, "module_docs")
+	if err := os.MkdirAll(moduleDocsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDocsDir, "auth.md"), []byte("# Auth\n\n## Overview\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, OutputDir: outputDir}
+	plan := &store.NavPlan{
+		Modules: []store.Module{{ID: "auth", Shared: false}},
+		ArchitectureSummary: &store.ArchSummary{Purpose: "Test service"},
+	}
+
+	if err := RunComposer(cfg, plan, store.FileIndex{}, store.DepGraph{}); err != nil {
+		t.Fatalf("RunComposer() error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(outputDir, "architecture.md"))
+	if err != nil {
+		t.Fatalf("architecture.md missing: %v", err)
+	}
+	if !strings.Contains(string(data), "# Architecture Overview") {
+		t.Fatalf("architecture.md content unexpected:\n%s", string(data))
+	}
+}
+
 func TestRunComposerWritesVitePressConfigAndOptionalLogo(t *testing.T) {
 	artifactsDir := t.TempDir()
 	outputDir := t.TempDir()

@@ -162,6 +162,57 @@ func dependencyDepth(moduleID string, graph store.DepGraph, seen map[string]bool
 	return maxDepth
 }
 
+func GenerateArchitecturePage(plan *store.NavPlan, graph store.DepGraph) string {
+	moduleGraph := buildModuleGraph(plan, graph)
+
+	var b strings.Builder
+	b.WriteString("# Architecture Overview\n\n")
+
+	if plan.ArchitectureSummary != nil {
+		b.WriteString(fmt.Sprintf("**Purpose:** %s\n\n", plan.ArchitectureSummary.Purpose))
+
+		if len(plan.ArchitectureSummary.Layers) > 0 {
+			b.WriteString("## Layers\n\n")
+			for i, layer := range plan.ArchitectureSummary.Layers {
+				b.WriteString(fmt.Sprintf("%d. %s\n", i+1, layer))
+			}
+			b.WriteString("\n")
+		}
+
+		if plan.ArchitectureSummary.DataFlow != "" {
+			b.WriteString(fmt.Sprintf("## Data Flow\n\n%s\n\n", plan.ArchitectureSummary.DataFlow))
+		}
+	}
+
+	// Mermaid dependency graph
+	b.WriteString("## Module Dependencies\n\n```mermaid\ngraph TD\n")
+	// Sort module IDs for deterministic output
+	moduleIDs := make([]string, 0, len(moduleGraph))
+	for id := range moduleGraph {
+		moduleIDs = append(moduleIDs, id)
+	}
+	sort.Strings(moduleIDs)
+
+	hasEdges := false
+	for _, id := range moduleIDs {
+		deps := moduleGraph[id]
+		sort.Strings(deps)
+		for _, dep := range deps {
+			b.WriteString(fmt.Sprintf("  %s --> %s\n", id, dep))
+			hasEdges = true
+		}
+	}
+	if !hasEdges {
+		// If no edges, show isolated nodes
+		for _, id := range moduleIDs {
+			b.WriteString(fmt.Sprintf("  %s\n", id))
+		}
+	}
+	b.WriteString("```\n")
+
+	return b.String()
+}
+
 func RunComposer(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph) error {
 	symbolMap := buildSymbolMap(idx)
 	if err := CopyModuleDocs(cfg.ArtifactsDir, cfg.OutputDir, plan, symbolMap); err != nil {
@@ -173,6 +224,11 @@ func RunComposer(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(cfg.OutputDir, "index.md"), []byte(indexContent), 0o644); err != nil {
+		return err
+	}
+
+	archPage := GenerateArchitecturePage(plan, graph)
+	if err := os.WriteFile(filepath.Join(cfg.OutputDir, "architecture.md"), []byte(archPage), 0o644); err != nil {
 		return err
 	}
 

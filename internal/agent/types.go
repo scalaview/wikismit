@@ -6,10 +6,12 @@ import (
 )
 
 type AgentInput struct {
-	Module        store.Module
-	FileIndex     store.FileIndex
-	SharedContext store.SharedContext
-	Config        *configpkg.Config
+	Module            store.Module
+	FileIndex         store.FileIndex
+	SharedContext     store.SharedContext
+	Config            *configpkg.Config
+	ArchSummary       *store.ArchSummary
+	NeighborSummaries map[string]string
 }
 
 type ModuleDoc struct {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/scalaview/wikismit/internal/planner"
+	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func BuildAgentPrompt(input AgentInput) string {
@@ -13,9 +14,14 @@ func BuildAgentPrompt(input AgentInput) string {
 
 	sections := []string{
 		fmt.Sprintf("You are a technical writer documenting the %q module of a software project.", input.Module.ID),
-		"## Code skeleton",
-		skeleton,
 	}
+
+	if input.ArchSummary != nil {
+		sections = append(sections, buildArchitectureBlock(input.ArchSummary))
+		sections = append(sections, buildModuleRoleBlock(input.Module, input.NeighborSummaries))
+	}
+
+	sections = append(sections, "## Code skeleton", skeleton)
 	if sharedBlock != "" {
 		sections = append(sections, sharedBlock)
 	}
@@ -64,4 +70,46 @@ func buildSharedModulesBlock(input AgentInput) string {
 	}
 
 	return strings.Join(sections, "\n\n")
+}
+
+func buildArchitectureBlock(arch *store.ArchSummary) string {
+	sections := []string{"## System Architecture"}
+	sections = append(sections, fmt.Sprintf("Purpose: %s", arch.Purpose))
+	if len(arch.Layers) > 0 {
+		sections = append(sections, fmt.Sprintf("Layers: %s", strings.Join(arch.Layers, " > ")))
+	}
+	if arch.DataFlow != "" {
+		sections = append(sections, fmt.Sprintf("Data flow: %s", arch.DataFlow))
+	}
+	return strings.Join(sections, "\n")
+}
+
+func buildModuleRoleBlock(m store.Module, summaries map[string]string) string {
+	sections := []string{"## This Module's Role"}
+
+	if len(m.DependsOnShared) > 0 {
+		upstream := []string{"Upstream:"}
+		for _, moduleID := range m.DependsOnShared {
+			if desc, ok := summaries[moduleID]; ok {
+				upstream = append(upstream, fmt.Sprintf("  %s: %s", moduleID, desc))
+			} else {
+				upstream = append(upstream, fmt.Sprintf("  %s", moduleID))
+			}
+		}
+		sections = append(sections, strings.Join(upstream, "\n"))
+	}
+
+	if len(m.ReferencedBy) > 0 {
+		downstream := []string{"Downstream:"}
+		for _, moduleID := range m.ReferencedBy {
+			if desc, ok := summaries[moduleID]; ok {
+				downstream = append(downstream, fmt.Sprintf("  %s: %s", moduleID, desc))
+			} else {
+				downstream = append(downstream, fmt.Sprintf("  %s", moduleID))
+			}
+		}
+		sections = append(sections, strings.Join(downstream, "\n"))
+	}
+
+	return strings.Join(sections, "\n")
 }
