@@ -18,10 +18,12 @@ func runAgentWithLogger(ctx context.Context, module store.Module, input AgentInp
 	requestInput := input
 	requestInput.Module = module
 	start := time.Now()
+	promptData := BuildAgentPrompt(requestInput)
 
-	content, err := client.Complete(ctx, llm.CompletionRequest{
+	content, err := client.Complete(ctx, &llm.CompletionRequest{
 		Model:     input.Config.LLM.AgentModel,
-		UserMsg:   BuildAgentPrompt(requestInput),
+		SystemMsg: promptData.SystemMsg,
+		UserMsg:   promptData.UserMsg,
 		MaxTokens: input.Config.LLM.MaxTokens,
 	})
 	if err != nil {

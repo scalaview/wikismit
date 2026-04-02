@@ -192,5 +192,9 @@ func RunComposer(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex
 		return err
 	}
 
+	if err := GenerateVitePressMermaidConfig(cfg.OutputDir); err != nil {
+		return err
+	}
+
 	return nil
 }

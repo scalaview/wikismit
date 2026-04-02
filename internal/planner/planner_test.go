@@ -287,7 +287,7 @@ func TestRunPlannerVerboseLoggingIncludesPromptSizingAndAttemptMetadataBeforeEac
 	}
 	callCount := 0
 
-	client := stubPlannerClient{complete: func(ctx context.Context, req llm.CompletionRequest) (string, error) {
+	client := stubPlannerClient{complete: func(ctx context.Context, req *llm.CompletionRequest) (string, error) {
 		_ = ctx
 		callCount++
 
@@ -444,10 +444,14 @@ func (l *plannerBufferLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
-type stubPlannerClient struct {
-	complete func(context.Context, llm.CompletionRequest) (string, error)
+func (l *plannerBufferLogger) Fault(msg string, fields ...any) {
+	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
-func (s stubPlannerClient) Complete(ctx context.Context, req llm.CompletionRequest) (string, error) {
+type stubPlannerClient struct {
+	complete func(context.Context, *llm.CompletionRequest) (string, error)
+}
+
+func (s stubPlannerClient) Complete(ctx context.Context, req *llm.CompletionRequest) (string, error) {
 	return s.complete(ctx, req)
 }

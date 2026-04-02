@@ -35,7 +35,7 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 			"planner_attempt", attempt+1,
 			"model", cfg.LLM.PlannerModel,
 		)
-		response, err := client.Complete(ctx, llm.CompletionRequest{
+		response, err := client.Complete(ctx, &llm.CompletionRequest{
 			Model:       cfg.LLM.PlannerModel,
 			UserMsg:     prompt,
 			MaxTokens:   cfg.LLM.MaxTokens,

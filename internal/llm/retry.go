@@ -35,7 +35,7 @@ func newRetryingClient(inner Client, maxRetries int, logger logpkg.Logger, backo
 	}
 }
 
-func (c *retryingClient) Complete(ctx context.Context, req CompletionRequest) (string, error) {
+func (c *retryingClient) Complete(ctx context.Context, req *CompletionRequest) (string, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {

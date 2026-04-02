@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -31,7 +32,8 @@ const simpleGoQuery = `
   path: (interpreted_string_literal) @import.path) @import.decl
 `
 
-type goParser struct{}
+type goParser struct {
+}
 
 var registerGoParser func(interface {
 	Extensions() []string
@@ -65,6 +67,7 @@ func (p *goParser) Extensions() []string {
 func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, error) {
 	parser := newGoParser()
 	defer parser.Close()
+	srcSplitter := newSrcSplitter(src)
 
 	tree := parser.Parse(src, nil)
 	defer tree.Close()
@@ -98,6 +101,8 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(functionNode.StartPosition()),
 				LineEnd:   lineNumber(functionNode.EndPosition()),
 				Exported:  isExported(name),
+				Path:      path,
+				Src:       srcSplitter.extractInnerBodies(lineNumber(functionNode.StartPosition()), lineNumber(functionNode.EndPosition())),
 			})
 			continue
 		}
@@ -125,6 +130,8 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(typeNode.StartPosition()),
 				LineEnd:   lineNumber(typeNode.EndPosition()),
 				Exported:  isExported(name),
+				Path:      path,
+				Src:       srcSplitter.extractInnerBodies(lineNumber(typeNode.StartPosition()), lineNumber(typeNode.EndPosition())),
 			})
 			continue
 		}
@@ -156,7 +163,33 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 		Functions:   functions,
 		Types:       types,
 		Imports:     imports,
+		Path:        path,
 	}, nil
+}
+
+type srcSplitter struct {
+	lines [][]byte
+}
+
+func newSrcSplitter(src []byte) *srcSplitter {
+	return &srcSplitter{
+		lines: bytes.Split(src, []byte("\n")),
+	}
+}
+
+func (s *srcSplitter) extractInnerBodies(start int, end int) string {
+	lines := s.lines
+	var b strings.Builder
+	start = start - 1
+	if end > len(lines) {
+		end = len(lines)
+	}
+	for _, line := range lines[start:end] {
+		b.Write(line)
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+	return b.String()
 }
 
 func contentHash(src []byte) string {

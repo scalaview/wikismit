@@ -61,7 +61,7 @@ func newClient(cfg configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
 
 const maxContinuations = 5
 
-func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (string, error) {
+func (c *openAIClient) Complete(ctx context.Context, req *CompletionRequest) (string, error) {
 	requestCtx := ctx
 	var cancel context.CancelFunc
 	if c.timeout > 0 {
@@ -73,7 +73,7 @@ func (c *openAIClient) Complete(ctx context.Context, req CompletionRequest) (str
 	var builder strings.Builder
 
 	for i := 0; i < maxContinuations; i++ {
-		resp, err := c.complete(requestCtx, &req, preoutput)
+		resp, err := c.complete(requestCtx, req, preoutput)
 		if err != nil {
 			return "", err
 		}

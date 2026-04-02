@@ -322,7 +322,7 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 				}
 			}
 			prompt := buildSharedPrompt(moduleID, skeleton, directDeps)
-			response, err := client.Complete(ctx, llm.CompletionRequest{
+			response, err := client.Complete(ctx, &llm.CompletionRequest{
 				Model:       model,
 				UserMsg:     prompt,
 				MaxTokens:   cfg.LLM.MaxTokens,

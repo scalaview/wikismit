@@ -9,7 +9,7 @@ import (
 type MockClient struct {
 	responses []string
 	errors    []error
-	calls     []CompletionRequest
+	calls     []*CompletionRequest
 	mu        sync.Mutex
 }
 
@@ -25,7 +25,7 @@ func (m *MockClient) WithErrors(errs ...error) *MockClient {
 	return m
 }
 
-func (m *MockClient) Complete(ctx context.Context, req CompletionRequest) (string, error) {
+func (m *MockClient) Complete(ctx context.Context, req *CompletionRequest) (string, error) {
 	_ = ctx
 
 	m.mu.Lock()
@@ -44,10 +44,10 @@ func (m *MockClient) Complete(ctx context.Context, req CompletionRequest) (strin
 	return m.responses[callIndex], nil
 }
 
-func (m *MockClient) Calls() []CompletionRequest {
+func (m *MockClient) Calls() []*CompletionRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]CompletionRequest(nil), m.calls...)
+	return append([]*CompletionRequest(nil), m.calls...)
 }
 
 func (m *MockClient) CallCount() int {

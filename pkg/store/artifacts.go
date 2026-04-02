@@ -10,6 +10,7 @@ type FileEntry struct {
 	Functions   []FunctionDecl `json:"functions"`
 	Types       []TypeDecl     `json:"types"`
 	Imports     []Import       `json:"imports"`
+	Path        string         `json:"path"`
 }
 
 type FunctionDecl struct {
@@ -18,6 +19,8 @@ type FunctionDecl struct {
 	LineStart int    `json:"line_start"`
 	LineEnd   int    `json:"line_end"`
 	Exported  bool   `json:"exported"`
+	Src       string `json:"src"`
+	Path      string `json:"path"`
 }
 
 type TypeDecl struct {
@@ -26,6 +29,8 @@ type TypeDecl struct {
 	LineStart int    `json:"line_start"`
 	LineEnd   int    `json:"line_end"`
 	Exported  bool   `json:"exported"`
+	Src       string `json:"src"`
+	Path      string `json:"path"`
 }
 
 type Import struct {

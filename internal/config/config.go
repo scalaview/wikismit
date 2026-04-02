@@ -19,6 +19,7 @@ type Config struct {
 	Agent        AgentConfig    `yaml:"agent"`
 	Cache        CacheConfig    `yaml:"cache"`
 	Site         SiteConfig     `yaml:"site"`
+	Language     string         `yaml:"language"`
 }
 
 type LLMConfig struct {
@@ -88,6 +89,7 @@ func defaultConfig() Config {
 			Enabled: true,
 			Dir:     "./artifacts/cache",
 		},
+		Language: "English",
 	}
 }
 
@@ -145,6 +147,10 @@ func applyDefaults(cfg *Config) {
 
 	if cfg.Cache.Dir == "" {
 		cfg.Cache.Dir = defaults.Cache.Dir
+	}
+
+	if cfg.Language == "" {
+		cfg.Language = defaults.Language
 	}
 }
 

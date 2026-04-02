@@ -11,5 +11,5 @@ type CompletionRequest struct {
 }
 
 type Client interface {
-	Complete(ctx context.Context, req CompletionRequest) (string, error)
+	Complete(ctx context.Context, req *CompletionRequest) (string, error)
 }
