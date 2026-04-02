@@ -94,7 +94,7 @@ func (a *Analyzer) walkRepoDir(repoPath string, rootPath string, idx store.FileI
 			return readErr
 		}
 
-		entry, parseErr := parser.ExtractSymbols(path, src)
+		entry, parseErr := parser.ExtractSymbols(path, relPath, src)
 		if parseErr != nil {
 			a.skippedFiles++
 			return nil

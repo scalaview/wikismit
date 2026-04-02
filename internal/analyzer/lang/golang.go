@@ -37,12 +37,12 @@ type goParser struct {
 
 var registerGoParser func(interface {
 	Extensions() []string
-	ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+	ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 })
 
 func SetGoParserRegister(register func(interface {
 	Extensions() []string
-	ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+	ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 })) {
 	registerGoParser = register
 	if registerGoParser != nil {
@@ -64,7 +64,7 @@ func (p *goParser) Extensions() []string {
 	return []string{".go"}
 }
 
-func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, error) {
+func (p *goParser) ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error) {
 	parser := newGoParser()
 	defer parser.Close()
 	srcSplitter := newSrcSplitter(src)
@@ -101,7 +101,7 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(functionNode.StartPosition()),
 				LineEnd:   lineNumber(functionNode.EndPosition()),
 				Exported:  isExported(name),
-				Path:      path,
+				Path:      relPath,
 				Src:       srcSplitter.extractInnerBodies(lineNumber(functionNode.StartPosition()), lineNumber(functionNode.EndPosition())),
 			})
 			continue
@@ -116,6 +116,8 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(methodNode.StartPosition()),
 				LineEnd:   lineNumber(methodNode.EndPosition()),
 				Exported:  isExported(name),
+				Path:      relPath,
+				Src:       srcSplitter.extractInnerBodies(lineNumber(methodNode.StartPosition()), lineNumber(methodNode.EndPosition())),
 			})
 			continue
 		}
@@ -130,7 +132,7 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(typeNode.StartPosition()),
 				LineEnd:   lineNumber(typeNode.EndPosition()),
 				Exported:  isExported(name),
-				Path:      path,
+				Path:      relPath,
 				Src:       srcSplitter.extractInnerBodies(lineNumber(typeNode.StartPosition()), lineNumber(typeNode.EndPosition())),
 			})
 			continue
@@ -145,6 +147,8 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 				LineStart: lineNumber(aliasNode.StartPosition()),
 				LineEnd:   lineNumber(aliasNode.EndPosition()),
 				Exported:  isExported(name),
+				Path:      relPath,
+				Src:       srcSplitter.extractInnerBodies(lineNumber(aliasNode.StartPosition()), lineNumber(aliasNode.EndPosition())),
 			})
 			continue
 		}
@@ -182,6 +186,7 @@ func (s *srcSplitter) extractInnerBodies(start int, end int) string {
 	var b strings.Builder
 	start = start - 1
 	if end > len(lines) {
+
 		end = len(lines)
 	}
 	for _, line := range lines[start:end] {
