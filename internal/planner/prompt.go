@@ -17,7 +17,15 @@ Rules:
 - If shared is false, owner must be "agent".
 - Respond ONLY with valid JSON. No preamble.
 
-Schema: { modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[] }] }
+Schema: {
+  modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[] }],
+  architecture_summary: {
+    purpose: "1-2 sentence system description",
+    layers: ["layer1", "layer2"],
+    data_flow: "end-to-end data flow description",
+    key_modules: ["module1", "module2"]
+  }
+}
 
 Example:
 {
@@ -38,7 +46,13 @@ Example:
       "depends_on_shared": [],
       "referenced_by": ["planner", "agent"]
     }
-  ]
+  ],
+  "architecture_summary": {
+    "purpose": "Documentation generator that analyzes source code and produces Markdown docs with VitePress site structure",
+    "layers": ["CLI", "Pipeline Orchestration", "Analysis/Planning", "LLM Agents", "Composition"],
+    "data_flow": "CLI args -> Analyzer (AST) -> Planner (LLM grouping) -> Preprocessor (shared summaries) -> Agent (module docs) -> Composer (site output)",
+    "key_modules": ["planner", "agent", "composer", "store"]
+  }
 }
 
 Skeleton:

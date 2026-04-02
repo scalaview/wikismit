@@ -72,6 +72,24 @@ func TestBuildPlannerPromptIncludesRulesThresholdAndSkeleton(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerPromptIncludesArchitectureSummarySchema(t *testing.T) {
+	skeleton := "// internal/auth/jwt.go"
+
+	got := buildPlannerPrompt(skeleton, 3)
+
+	for _, want := range []string{
+		"architecture_summary",
+		"purpose",
+		"layers",
+		"data_flow",
+		"key_modules",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildPlannerPrompt() missing architecture_summary field %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestBuildPlannerPromptIncludesExplicitOwnerRules(t *testing.T) {
 	skeleton := "// === internal/auth/jwt.go ===\nfunc GenerateToken() string  // internal/auth/jwt.go:10"
 

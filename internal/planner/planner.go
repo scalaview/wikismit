@@ -94,5 +94,9 @@ func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 		}
 	}
 
+	if plan.ArchitectureSummary != nil && plan.ArchitectureSummary.Purpose == "" {
+		return fmt.Errorf("architecture_summary.purpose must be non-empty when provided")
+	}
+
 	return nil
 }

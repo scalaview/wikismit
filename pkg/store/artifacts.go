@@ -45,9 +45,17 @@ type Module struct {
 	ReferencedBy    []string `json:"referenced_by,omitempty"`
 }
 
+type ArchSummary struct {
+	Purpose    string   `json:"purpose"`
+	Layers     []string `json:"layers,omitempty"`
+	DataFlow   string   `json:"data_flow,omitempty"`
+	KeyModules []string `json:"key_modules,omitempty"`
+}
+
 type NavPlan struct {
-	GeneratedAt time.Time `json:"generated_at"`
-	Modules     []Module  `json:"modules"`
+	GeneratedAt         time.Time    `json:"generated_at"`
+	Modules             []Module     `json:"modules"`
+	ArchitectureSummary *ArchSummary `json:"architecture_summary,omitempty"`
 }
 
 type SharedSummary struct {
