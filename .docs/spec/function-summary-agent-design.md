@@ -67,7 +67,8 @@ type depGraph struct {
 
 1. Iterate all `FunctionDecl` in `FileIndex`
 2. Skip functions where `Summary != ""` (pre-resolved)
-3. For each `CallRef` where `Ownership == OwnershipInternal`:
+3. Skip functions where `Src == ""` (nothing to summarize)
+4. For each `CallRef` where `Ownership == OwnershipInternal`:
    - Look up callee in FileIndex by `CallRef.Path + CallRef.Name`
    - If callee exists and needs summary -> record edge, increment inDegree
    - If callee already has summary or doesn't exist -> ignore (resolved/external)
@@ -96,18 +97,23 @@ Created fresh by each `Run` call. Passed through the method chain.
 
 ## Batch Sizing
 
-Token estimation reuses the existing `llm.EstimatePromptTokens` formula: `(charCount + 3) / 4`.
+Token estimation uses a local `estimateTokens` function (same formula as `llm.estimatePromptTokens`: `(charCount + 3) / 4`). The `llm` version is unexported, so we define our own.
 
 Each function's estimated cost:
 
 ```go
+func estimateTokens(charCount int) int {
+    if charCount <= 0 { return 0 }
+    return (charCount + 3) / 4
+}
+
 func estimateFunctionTokens(fn *store.FunctionDecl, summaries map[FuncSign]string) int {
-    cost := llm.EstimatePromptTokens(len(fn.Src)) + 50
+    cost := estimateTokens(len(fn.Src)) + 50
     for _, call := range fn.Calls {
         if call.Ownership == store.OwnershipInternal {
             sign := FuncSign(call.Path + "#" + call.Name)
             if s, ok := summaries[sign]; ok {
-                cost += llm.EstimatePromptTokens(len(s))
+                cost += estimateTokens(len(s))
             }
         }
     }
@@ -115,7 +121,7 @@ func estimateFunctionTokens(fn *store.FunctionDecl, summaries map[FuncSign]strin
 }
 ```
 
-Functions accumulate into a batch until adding the next function would exceed `ContextBudget`.
+Functions accumulate into a batch until adding the next function would exceed `ContextBudget`. Functions with empty `Src` are skipped (no source to summarize).
 
 ## Prompt Construction
 
@@ -147,7 +153,38 @@ type functionSummaryResponse struct {
 }
 ```
 
-Use JSON extraction utilities from `internal/llm/json.go` to parse the response.
+Parse using `llm.ParseJSON[functionSummaryResponse](content, &resp)` — a generic helper that strips markdown fences before unmarshaling.
+
+## Applying Summaries
+
+`applySummaries` writes parsed results back to both the `runContext.summaries` map and the `FileIndex`:
+
+```go
+func (a *FunctionSummaryAgent) applySummaries(rc *runContext, results []*prompt.Function) {
+    for _, fn := range results {
+        sign := FuncSign(fn.Path + "#" + fn.ID)
+        // Update summaries map for prompt construction
+        rc.summaries[sign] = fn.Summary
+
+        // Update FileIndex in-place
+        entry, ok := rc.idx[fn.Path]
+        if !ok { continue }
+        for _, decl := range entry.Functions {
+            if decl.Name == fn.ID {
+                decl.Summary = fn.Summary
+                break
+            }
+        }
+    }
+}
+```
+
+## Edge Cases
+
+- **Empty FileIndex**: `Run` returns `nil` immediately (no work to do).
+- **Function with empty Src**: Skipped during graph construction (nothing to summarize).
+- **All functions already have summaries**: Graph is empty, `Run` returns `nil`.
+- **LLM returns fewer summaries than requested**: Apply whatever was returned, unresolved functions remain in graph for next iteration.
 
 ## Error Handling
 
