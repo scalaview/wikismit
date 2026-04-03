@@ -27,6 +27,9 @@ type ModuleUserPromptData struct {
 //go:embed function_system_prompt.tmpl
 var FunctionSystemPrompt string
 
+//go:embed function_user_prompt.tmpl
+var FunctionUserPrompt string
+
 type FunctionStruct struct {
 	Path            string                  `json:"path"`
 	Src             string                  `json:"src"`

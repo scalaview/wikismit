@@ -1,0 +1,21 @@
+You are an expert technical writer and code analysis assistant.
+Please summarize the following functions:
+
+{{range $fn := .Functions}}
+<function_declaration>
+Path: {{$fn.Path}}
+Source:
+\`\`\`
+{{$fn.Src}}
+\`\`\`
+{{if $fn.CalledFunctions}}
+<called_functions>
+{{range $calledFn := $fn.CalledFunctions}}{{if $calledFn.Summary}}
+<function_summary>
+{{$calledFn.Summary}}
+</function_summary>
+{{end}}{{end}}
+</called_functions>
+{{end}}
+</function_declaration>
+{{end}}
