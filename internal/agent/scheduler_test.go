@@ -15,14 +15,14 @@ import (
 )
 
 func TestRunSchedulerCapsConcurrentAgents(t *testing.T) {
-	modules := []store.Module{
+	modules := []*store.Module{
 		{ID: "auth"},
 		{ID: "billing"},
 		{ID: "logger"},
 		{ID: "config"},
 	}
 
-	input := AgentInput{
+	input := &AgentInput{
 		Config: &configpkg.Config{
 			Agent: configpkg.AgentConfig{Concurrency: 2},
 		},
@@ -34,7 +34,7 @@ func TestRunSchedulerCapsConcurrentAgents(t *testing.T) {
 		peakActive int
 	)
 
-	runner := func(ctx context.Context, module store.Module, input AgentInput) ModuleDoc {
+	runner := func(ctx context.Context, module *store.Module, input *AgentInput) *ModuleDoc {
 		_ = ctx
 		_ = input
 
@@ -51,7 +51,7 @@ func TestRunSchedulerCapsConcurrentAgents(t *testing.T) {
 		active--
 		mu.Unlock()
 
-		return ModuleDoc{ModuleID: module.ID, Content: module.ID}
+		return &ModuleDoc{ModuleID: module.ID, Content: module.ID}
 	}
 
 	if err := runScheduler(context.Background(), modules, input, 2, runner, t.TempDir()); err != nil {
@@ -64,8 +64,8 @@ func TestRunSchedulerCapsConcurrentAgents(t *testing.T) {
 
 func TestCollectResultsWritesSuccessfulModuleDocs(t *testing.T) {
 	artifactsDir := t.TempDir()
-	results := make(chan ModuleDoc, 1)
-	results <- ModuleDoc{ModuleID: "auth", Content: "# Auth"}
+	results := make(chan *ModuleDoc, 1)
+	results <- &ModuleDoc{ModuleID: "auth", Content: "# Auth"}
 	close(results)
 
 	failures, err := collectResults(results, artifactsDir)
@@ -88,8 +88,8 @@ func TestCollectResultsWritesSuccessfulModuleDocs(t *testing.T) {
 
 func TestCollectResultsSkipsFailedModuleDocs(t *testing.T) {
 	artifactsDir := t.TempDir()
-	results := make(chan ModuleDoc, 1)
-	results <- ModuleDoc{ModuleID: "billing", Err: errors.New("boom")}
+	results := make(chan *ModuleDoc, 1)
+	results <- &ModuleDoc{ModuleID: "billing", Err: errors.New("boom")}
 	close(results)
 
 	failures, err := collectResults(results, artifactsDir)
@@ -111,19 +111,19 @@ func TestCollectResultsSkipsFailedModuleDocs(t *testing.T) {
 
 func TestRunSchedulerProcessesAllModulesWithPartialFailures(t *testing.T) {
 	artifactsDir := t.TempDir()
-	modules := []store.Module{{ID: "auth"}, {ID: "billing"}, {ID: "config"}}
+	modules := []*store.Module{{ID: "auth"}, {ID: "billing"}, {ID: "config"}}
 
-	runner := func(ctx context.Context, module store.Module, input AgentInput) ModuleDoc {
+	runner := func(ctx context.Context, module *store.Module, input *AgentInput) *ModuleDoc {
 		_ = ctx
 		_ = input
 
 		if module.ID == "billing" {
-			return ModuleDoc{ModuleID: module.ID, Err: errors.New("boom")}
+			return &ModuleDoc{ModuleID: module.ID, Err: errors.New("boom")}
 		}
-		return ModuleDoc{ModuleID: module.ID, Content: "# " + strings.ToUpper(module.ID[:1]) + module.ID[1:]}
+		return &ModuleDoc{ModuleID: module.ID, Content: "# " + strings.ToUpper(module.ID[:1]) + module.ID[1:]}
 	}
 
-	err := runScheduler(context.Background(), modules, AgentInput{}, 2, runner, artifactsDir)
+	err := runScheduler(context.Background(), modules, &AgentInput{}, 2, runner, artifactsDir)
 	if err == nil {
 		t.Fatal("runScheduler() error = nil, want partial-failure error")
 	}
@@ -147,20 +147,20 @@ func TestRunSchedulerProcessesAllModulesWithPartialFailures(t *testing.T) {
 func TestRunSchedulerStopsCleanlyOnContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	artifactsDir := t.TempDir()
-	modules := []store.Module{{ID: "auth"}, {ID: "billing"}, {ID: "config"}}
+	modules := []*store.Module{{ID: "auth"}, {ID: "billing"}, {ID: "config"}}
 
 	started := make(chan struct{}, len(modules))
-	runner := func(ctx context.Context, module store.Module, input AgentInput) ModuleDoc {
+	runner := func(ctx context.Context, module *store.Module, input *AgentInput) *ModuleDoc {
 		_ = input
 
 		started <- struct{}{}
 		<-ctx.Done()
-		return ModuleDoc{ModuleID: module.ID, Err: ctx.Err()}
+		return &ModuleDoc{ModuleID: module.ID, Err: ctx.Err()}
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		done <- runScheduler(ctx, modules, AgentInput{}, 2, runner, artifactsDir)
+		done <- runScheduler(ctx, modules, &AgentInput{}, 2, runner, artifactsDir)
 	}()
 
 	<-started

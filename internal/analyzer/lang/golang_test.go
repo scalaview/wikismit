@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewGoParserParsesMinimalSource(t *testing.T) {
-	parser := newGoParser()
+	parser := newTreeSitterParser()
 	defer parser.Close()
 
 	tree := parser.Parse([]byte("package main\n"), nil)
@@ -39,10 +39,10 @@ func TestContentHashIsStableForSameBytes(t *testing.T) {
 }
 
 func TestExtractSymbolsReturnsLanguageAndHashForEmptyGoFile(t *testing.T) {
-	parser := &goParser{}
+	parser := newGoParser()
 	src := []byte("package main\n")
 
-	entry, err := parser.ExtractSymbols("main.go", src)
+	entry, err := parser.ExtractSymbols("main.go", "main.go", src)
 	if err != nil {
 		t.Fatalf("ExtractSymbols() error = %v", err)
 	}
@@ -77,8 +77,8 @@ func TestExtractSymbolsMatchesSimpleGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
 	}
-	parser := &goParser{}
-	got, err := parser.ExtractSymbols("simple.go", src)
+	parser := newGoParser()
+	got, err := parser.ExtractSymbols("simple.go", "simple.go", src)
 	if err != nil {
 		t.Fatalf("ExtractSymbols() error = %v", err)
 	}
@@ -106,8 +106,8 @@ func TestExtractSymbolsMatchesComplexGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
 	}
-	parser := &goParser{}
-	got, err := parser.ExtractSymbols("complex.go", src)
+	parser := newGoParser()
+	got, err := parser.ExtractSymbols("complex.go", "complex.go", src)
 	if err != nil {
 		t.Fatalf("ExtractSymbols() error = %v", err)
 	}

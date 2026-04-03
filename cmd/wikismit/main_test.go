@@ -373,7 +373,7 @@ agent:
 	}); err != nil {
 		t.Fatalf("WriteDepGraph() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
@@ -451,7 +451,7 @@ agent:
 	}); err != nil {
 		t.Fatalf("RunPhase1() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},

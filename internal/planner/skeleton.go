@@ -110,6 +110,7 @@ func BuildSkeleton(files []string, idx store.FileIndex, maxTokens int) string {
 	trimmedChars := 0
 	for _, line := range selectedLines {
 		if estimatedTokensAfterAppend(trimmedChars, line) > maxTokens {
+			logger.Warn("planner skeleton truncated", "dropped_lines", len(selectedLines)-len(trimmedLines), "max_tokens", maxTokens)
 			break
 		}
 		trimmedLines, trimmedChars = appendLineWithCharCount(trimmedLines, trimmedChars, line)

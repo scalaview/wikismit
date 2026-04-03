@@ -7,14 +7,20 @@
       "signature": "func Exported(name string) string",
       "line_start": 7,
       "line_end": 9,
-      "exported": true
+      "exported": true,
+      "function_type": 0,
+      "src": "func Exported(name string) string {\n\treturn fmt.Sprint(name)\n}\n\n",
+      "path": "simple.go"
     },
     {
       "name": "hidden",
       "signature": "func hidden()",
       "line_start": 11,
       "line_end": 11,
-      "exported": false
+      "exported": false,
+      "function_type": 0,
+      "src": "func hidden() {}\n\n",
+      "path": "simple.go"
     }
   ],
   "types": [
@@ -23,7 +29,9 @@
       "kind": "struct",
       "line_start": 5,
       "line_end": 5,
-      "exported": true
+      "exported": true,
+      "src": "type Widget struct{}\n\n",
+      "path": "simple.go"
     }
   ],
   "imports": [
@@ -31,5 +39,6 @@
       "path": "fmt",
       "internal": false
     }
-  ]
+  ],
+  "path": "simple.go"
 }

@@ -87,7 +87,7 @@ func CopyModuleDocs(artifactsDir string, docsDir string, plan *store.NavPlan, sy
 
 func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
 	moduleGraph := buildModuleGraph(plan, graph)
-	modules := append([]store.Module(nil), plan.Modules...)
+	modules := append([]*store.Module(nil), plan.Modules...)
 	sort.Slice(modules, func(i int, j int) bool {
 		leftDepth := dependencyDepth(modules[i].ID, moduleGraph, map[string]bool{})
 		rightDepth := dependencyDepth(modules[j].ID, moduleGraph, map[string]bool{})
@@ -189,6 +189,10 @@ func RunComposer(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex
 		return err
 	}
 	if err := WriteVitePressAssets(cfg.OutputDir, vitepressConfig, cfg); err != nil {
+		return err
+	}
+
+	if err := GenerateVitePressMermaidConfig(cfg.OutputDir); err != nil {
 		return err
 	}
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"text/template"
 
+	"github.com/scalaview/wikismit/internal/composer/tmpl"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/pkg/store"
 )
@@ -23,39 +23,6 @@ type vitepressTemplateData struct {
 	HasEditLink bool
 	RepoURL     string
 }
-
-var vitepressConfigTemplate = template.Must(template.New("vitepress-config").Parse(`import { defineConfig } from 'vitepress'
-
-export default defineConfig({
-  title: '{{ .Title }}',
-  ignoreDeadLinks: true,
-  themeConfig: {
-{{- if .HasEditLink }}
-    editLink: {
-      pattern: '{{ .RepoURL }}/edit/main/:path',
-    },
-{{- end }}
-    sidebar: [
-      {
-        text: 'Modules',
-        items: [
-{{- range .Modules }}
-          { text: '{{ .Text }}', link: '{{ .Link }}' },
-{{- end }}
-        ],
-      },
-      {
-        text: 'Shared',
-        items: [
-{{- range .Shared }}
-          { text: '{{ .Text }}', link: '{{ .Link }}' },
-{{- end }}
-        ],
-      },
-    ],
-  },
-})
-`))
 
 const docsPackageJSON = `{
   "private": true,
@@ -105,7 +72,7 @@ func GenerateVitePressConfig(plan *store.NavPlan, graph store.DepGraph, cfg *con
 	}
 
 	var buf bytes.Buffer
-	if err := vitepressConfigTemplate.Execute(&buf, data); err != nil {
+	if err := tmpl.VitepressConfigTmplParsed.Execute(&buf, data); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
@@ -136,4 +103,21 @@ func WriteVitePressAssets(docsDir string, configText string, cfg *configpkg.Conf
 		return err
 	}
 	return os.WriteFile(filepath.Join(publicDir, "logo.png"), logoData, 0o644)
+}
+
+func GenerateVitePressMermaidConfig(docsDir string) error {
+	var buf bytes.Buffer
+	if err := tmpl.VitepressMermaidTmplParsed.Execute(&buf, nil); err != nil {
+		return err
+	}
+
+	vitepressDir := filepath.Join(docsDir, ".vitepress/theme/")
+	if err := os.MkdirAll(vitepressDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(vitepressDir, "index.ts"), buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+
+	return nil
 }

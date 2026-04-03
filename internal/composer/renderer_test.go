@@ -69,7 +69,7 @@ func TestCopyModuleDocsWritesModulesAndSharedDocsToSeparateDirectories(t *testin
 		t.Fatalf("WriteFile(logger.md) error = %v", err)
 	}
 
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Shared: false},
 		{ID: "logger", Shared: true},
 	}}
@@ -98,7 +98,7 @@ func TestCopyModuleDocsAppliesCitationsAndTOCBeforeWriting(t *testing.T) {
 		t.Fatalf("WriteFile(auth.md) error = %v", err)
 	}
 
-	plan := &store.NavPlan{Modules: []store.Module{{ID: "auth", Shared: false}}}
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
 	symbolMap := map[string]string{"GenerateToken": "internal/auth/jwt.go#L24"}
 
 	if err := CopyModuleDocs(artifactsDir, docsDir, plan, symbolMap); err != nil {
@@ -119,7 +119,7 @@ func TestCopyModuleDocsAppliesCitationsAndTOCBeforeWriting(t *testing.T) {
 }
 
 func TestGenerateIndexPageListsModulesByDependencyDepth(t *testing.T) {
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "api", Shared: false, Files: []string{"api/handler.go"}},
 		{ID: "auth", Shared: false, Files: []string{"auth/jwt.go"}},
 		{ID: "db", Shared: false, Files: []string{"db/conn.go"}},
@@ -144,7 +144,7 @@ func TestGenerateIndexPageListsModulesByDependencyDepth(t *testing.T) {
 }
 
 func TestGenerateIndexPageWithFileGraphBuildsModuleLevelGraph(t *testing.T) {
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "api", Shared: false, Files: []string{"internal/api/server.go", "internal/api/routes.go"}},
 		{ID: "auth", Shared: false, Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}},
 		{ID: "db", Shared: false, Files: []string{"internal/db/connection.go"}},
@@ -173,7 +173,7 @@ func TestGenerateIndexPageWithFileGraphBuildsModuleLevelGraph(t *testing.T) {
 }
 
 func TestGenerateIndexPageIncludesSharedUsedByColumn(t *testing.T) {
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "logger", Shared: true, ReferencedBy: []string{"api", "auth"}},
 	}}
 
@@ -196,7 +196,7 @@ func TestRunComposerWritesDocsIndexAndValidationReport(t *testing.T) {
 	}
 
 	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, OutputDir: outputDir}
-	plan := &store.NavPlan{Modules: []store.Module{{ID: "auth", Shared: false}}}
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
 	idx := store.FileIndex{}
 	graph := store.DepGraph{"auth": nil}
 
@@ -227,7 +227,7 @@ func TestRunComposerCreatesModuleAndSharedDirectories(t *testing.T) {
 	}
 
 	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, OutputDir: outputDir}
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Shared: false},
 		{ID: "logger", Shared: true},
 	}}
@@ -268,7 +268,7 @@ func TestRunComposerWritesVitePressConfigAndOptionalLogo(t *testing.T) {
 			Logo:  logoPath,
 		},
 	}
-	plan := &store.NavPlan{Modules: []store.Module{{ID: "auth", Shared: false}}}
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
 
 	if err := RunComposer(cfg, plan, store.FileIndex{}, store.DepGraph{}); err != nil {
 		t.Fatalf("RunComposer() error = %v", err)

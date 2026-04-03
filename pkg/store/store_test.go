@@ -14,20 +14,20 @@ func sampleFileIndex() FileIndex {
 		"internal/auth/jwt.go": {
 			Language:    "go",
 			ContentHash: "sha256:abc",
-			Functions: []FunctionDecl{{
+			Functions: []*FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
 				LineEnd:   20,
 				Exported:  true,
 			}},
-			Types: []TypeDecl{{
+			Types: []*TypeDecl{{
 				Name:      "Claims",
 				Kind:      "struct",
 				LineStart: 1,
 				Exported:  true,
 			}},
-			Imports: []Import{{Path: "internal/models", Internal: true}},
+			Imports: []*Import{{Path: "internal/models", Internal: true}},
 		},
 	}
 }
@@ -38,10 +38,10 @@ func sampleDepGraph() DepGraph {
 	}
 }
 
-func sampleNavPlan() NavPlan {
-	return NavPlan{
+func sampleNavPlan() *NavPlan {
+	return &NavPlan{
 		GeneratedAt: time.Unix(1710000000, 0).UTC(),
-		Modules: []Module{{
+		Modules: []*Module{{
 			ID:              "auth",
 			Files:           []string{"internal/auth/jwt.go"},
 			Shared:          false,
@@ -57,7 +57,7 @@ func sampleSharedContext() SharedContext {
 			Summary:    "Structured logger wrapper",
 			KeyTypes:   []string{"Logger"},
 			SourceRefs: []string{"pkg/logger/logger.go#L1"},
-			KeyFunctions: []KeyFunction{{
+			KeyFunctions: []*KeyFunction{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				Ref:       "pkg/logger/logger.go#L18",
@@ -66,10 +66,10 @@ func sampleSharedContext() SharedContext {
 	}
 }
 
-func sampleValidationReport() ValidationReport {
-	return ValidationReport{
+func sampleValidationReport() *ValidationReport {
+	return &ValidationReport{
 		GeneratedAt: time.Unix(1710001234, 0).UTC(),
-		BrokenLinks: []BrokenLink{{
+		BrokenLinks: []*BrokenLink{{
 			SourceFile: "docs/modules/auth.md",
 			LinkText:   "GenerateToken",
 			LinkTarget: "internal/auth/jwt.md#generate-token",

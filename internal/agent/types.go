@@ -6,7 +6,7 @@ import (
 )
 
 type AgentInput struct {
-	Module        store.Module
+	Module        *store.Module
 	FileIndex     store.FileIndex
 	SharedContext store.SharedContext
 	Config        *configpkg.Config

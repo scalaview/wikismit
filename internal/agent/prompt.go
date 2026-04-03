@@ -1,36 +1,52 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
+	"github.com/scalaview/wikismit/internal/agent/prompt"
+	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/internal/planner"
 )
 
-func BuildAgentPrompt(input AgentInput) string {
+var logger = logpkg.New(false)
+
+type AgentPromptData struct {
+	SystemMsg string
+	UserMsg   string
+}
+
+func BuildAgentPrompt(input *AgentInput) *AgentPromptData {
 	skeleton := planner.BuildSkeleton(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
 	sharedBlock := buildSharedModulesBlock(input)
 
-	sections := []string{
-		fmt.Sprintf("You are a technical writer documenting the %q module of a software project.", input.Module.ID),
-		"## Code skeleton",
-		skeleton,
+	var sysBuf bytes.Buffer
+	if err := prompt.ModuleSystemPromptTmp.Execute(&sysBuf, &prompt.ModuleSystemPromptData{
+		RepoType: "Golang", //TODO: make this dynamic based on input.Config.Language
+		RepoName: input.Module.ID,
+		Language: input.Config.Language,
+	}); err != nil {
+		logger.Fault("execute module system prompt: %v", err)
 	}
-	if sharedBlock != "" {
-		sections = append(sections, sharedBlock)
-	}
-	sections = append(sections,
-		"## Instructions",
-		"- Write a Markdown document with sections: Overview, Key Types, Key Functions, Usage Notes.",
-		"- For every function reference, include a source link: [FuncName](path/to/file.go#L{line}).",
-		"- Do NOT describe shared modules listed above — link to them using the format shown.",
-		"- Use clear, concise technical prose. Avoid repeating the function signature verbatim.",
-	)
 
-	return strings.Join(sections, "\n\n")
+	var userBuf bytes.Buffer
+	if err := prompt.ModuleUserPromptTmp.Execute(&userBuf, &prompt.ModuleUserPromptData{
+		ModuleID:    input.Module.ID,
+		Skeleton:    skeleton,
+		SharedBlock: sharedBlock,
+		Language:    input.Config.Language,
+	}); err != nil {
+		logger.Fault("execute module user prompt: %v", err)
+	}
+
+	return &AgentPromptData{
+		SystemMsg: sysBuf.String(),
+		UserMsg:   userBuf.String(),
+	}
 }
 
-func buildSharedModulesBlock(input AgentInput) string {
+func buildSharedModulesBlock(input *AgentInput) string {
 	if len(input.Module.DependsOnShared) == 0 {
 		return ""
 	}

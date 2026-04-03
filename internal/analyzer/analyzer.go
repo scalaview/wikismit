@@ -55,8 +55,8 @@ func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 
 	for path, entry := range idx {
 		entryCopy := entry
-		entryCopy.Imports = append([]store.Import(nil), entry.Imports...)
-		if err := a.resolveImports(repoPath, &entryCopy); err != nil {
+		entryCopy.Imports = append([]*store.Import(nil), entry.Imports...)
+		if err := a.resolveImports(repoPath, entryCopy); err != nil {
 			return nil, err
 		}
 		idx[path] = entryCopy
@@ -94,13 +94,13 @@ func (a *Analyzer) walkRepoDir(repoPath string, rootPath string, idx store.FileI
 			return readErr
 		}
 
-		entry, parseErr := parser.ExtractSymbols(path, src)
+		entry, parseErr := parser.ExtractSymbols(path, relPath, src)
 		if parseErr != nil {
 			a.skippedFiles++
 			return nil
 		}
 
-		idx[relPath] = entry
+		idx[relPath] = &entry
 		return nil
 	})
 }

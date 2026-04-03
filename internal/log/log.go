@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ type Logger interface {
 	Info(msg string, fields ...any)
 	Warn(msg string, fields ...any)
 	Error(msg string, fields ...any)
+	Fault(msg string, fields ...any)
 }
 
 type slogLogger struct {
@@ -46,4 +48,8 @@ func (l slogLogger) Warn(msg string, fields ...any) {
 
 func (l slogLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
+}
+
+func (l slogLogger) Fault(msg string, fields ...any) {
+	panic(fmt.Sprintf("%s: %v", msg, fields))
 }

@@ -16,7 +16,7 @@ type stubClient struct {
 	calls     int
 }
 
-func (s *stubClient) Complete(ctx context.Context, req CompletionRequest) (string, error) {
+func (s *stubClient) Complete(ctx context.Context, req *CompletionRequest) (string, error) {
 	_ = ctx
 	_ = req
 	idx := s.calls
@@ -36,6 +36,7 @@ func (noopLogger) Debug(string, ...any) {}
 func (noopLogger) Info(string, ...any)  {}
 func (noopLogger) Warn(string, ...any)  {}
 func (noopLogger) Error(string, ...any) {}
+func (noopLogger) Fault(string, ...any) {}
 
 func TestRetryingClientRetriesOnceThenSucceeds(t *testing.T) {
 	inner := &stubClient{
@@ -45,7 +46,7 @@ func TestRetryingClientRetriesOnceThenSucceeds(t *testing.T) {
 
 	client := newRetryingClient(inner, 3, noopLogger{}, func(int) time.Duration { return 0 })
 
-	got, err := client.Complete(context.Background(), CompletionRequest{UserMsg: "hello"})
+	got, err := client.Complete(context.Background(), &CompletionRequest{UserMsg: "hello"})
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -69,7 +70,7 @@ func TestRetryingClientStopsAfterMaxRetries(t *testing.T) {
 
 	client := newRetryingClient(inner, 3, noopLogger{}, func(int) time.Duration { return 0 })
 
-	_, err := client.Complete(context.Background(), CompletionRequest{UserMsg: "hello"})
+	_, err := client.Complete(context.Background(), &CompletionRequest{UserMsg: "hello"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want final retryable error")
 	}
@@ -85,7 +86,7 @@ func TestRetryingClientDoesNotRetry401(t *testing.T) {
 
 	client := newRetryingClient(inner, 3, noopLogger{}, func(int) time.Duration { return 0 })
 
-	_, err := client.Complete(context.Background(), CompletionRequest{UserMsg: "hello"})
+	_, err := client.Complete(context.Background(), &CompletionRequest{UserMsg: "hello"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want non-retryable error")
 	}
@@ -104,7 +105,7 @@ func TestRetryingClientStopsWhenContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := client.Complete(ctx, CompletionRequest{UserMsg: "hello"})
+	_, err := client.Complete(ctx, &CompletionRequest{UserMsg: "hello"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want cancellation error")
 	}

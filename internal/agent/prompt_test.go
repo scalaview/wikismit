@@ -16,15 +16,15 @@ func sampleAgentConfig() *configpkg.Config {
 	}
 }
 
-func sampleAgentInput() AgentInput {
-	return AgentInput{
-		Module: store.Module{
+func sampleAgentInput() *AgentInput {
+	return &AgentInput{
+		Module: &store.Module{
 			ID:    "auth",
 			Files: []string{"internal/auth/jwt.go"},
 		},
 		FileIndex: store.FileIndex{
 			"internal/auth/jwt.go": {
-				Functions: []store.FunctionDecl{{
+				Functions: []*store.FunctionDecl{{
 					Name:      "GenerateToken",
 					Signature: "func GenerateToken() string",
 					LineStart: 12,
@@ -65,17 +65,17 @@ func TestBuildAgentPromptOmitsSharedContextWhenModuleHasNoSharedDeps(t *testing.
 	got := BuildAgentPrompt(input)
 
 	for _, want := range []string{
-		`You are a technical writer documenting the "auth" module of a software project.`,
-		"## Code skeleton",
+		"You are an expert technical writer and software architect.",
+		"The module id is auth",
 		"func GenerateToken() string  // internal/auth/jwt.go:12",
-		"Write a Markdown document with sections: Overview, Key Types, Key Functions, Usage Notes.",
+		"**Introduction:** Start with a concise introduction",
 	} {
-		if !strings.Contains(got, want) {
+		if !strings.Contains(got.UserMsg, want) {
 			t.Fatalf("BuildAgentPrompt() missing %q:\n%s", want, got)
 		}
 	}
 
-	if strings.Contains(got, "## Shared modules") {
+	if strings.Contains(got.UserMsg, "## Shared modules") {
 		t.Fatalf("BuildAgentPrompt() unexpectedly included shared modules block:\n%s", got)
 	}
 }
@@ -87,7 +87,7 @@ func TestBuildAgentPromptInjectsDeclaredSharedDependenciesOnly(t *testing.T) {
 		"logger": {
 			Summary:  "Structured logger wrapping zerolog.",
 			KeyTypes: []string{"Logger"},
-			KeyFunctions: []store.KeyFunction{{
+			KeyFunctions: []*store.KeyFunction{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				Ref:       "pkg/logger/logger.go#L18",
@@ -107,30 +107,38 @@ func TestBuildAgentPromptInjectsDeclaredSharedDependenciesOnly(t *testing.T) {
 		"Key functions: New",
 		"Reference: [See full docs](../shared/logger.md)",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("BuildAgentPrompt() missing %q:\n%s", want, got)
+		if !strings.Contains(got.UserMsg, want) {
+			t.Fatalf("BuildAgentPrompt() missing %q:\n%s", want, got.UserMsg)
 		}
 	}
 
-	if strings.Contains(got, "Error helpers shared across modules.") {
-		t.Fatalf("BuildAgentPrompt() unexpectedly included undeclared shared summary:\n%s", got)
+	if strings.Contains(got.UserMsg, "Error helpers shared across modules.") {
+		t.Fatalf("BuildAgentPrompt() unexpectedly included undeclared shared summary:\n%s", got.UserMsg)
 	}
 }
 
 func TestBuildAgentPromptIncludesCitationFormatInstruction(t *testing.T) {
 	got := BuildAgentPrompt(sampleAgentInput())
 
-	want := "[FuncName](path/to/file.go#L{line})"
-	if !strings.Contains(got, want) {
-		t.Fatalf("BuildAgentPrompt() missing citation format instruction %q:\n%s", want, got)
+	want := "Sources: [filename.ext:start_line-end_line]()"
+	if !strings.Contains(got.UserMsg, want) {
+		t.Fatalf("BuildAgentPrompt() missing citation format instruction %q:\n%s", want, got.UserMsg)
 	}
 }
 
 func TestBuildAgentPromptIncludesSharedOwnershipConstraint(t *testing.T) {
-	got := BuildAgentPrompt(sampleAgentInput())
+	input := sampleAgentInput()
+	input.Module.DependsOnShared = []string{"logger"}
+	input.SharedContext = store.SharedContext{
+		"logger": {
+			Summary: "Shared logger helpers.",
+		},
+	}
 
-	want := "Do NOT describe shared modules"
-	if !strings.Contains(got, want) {
-		t.Fatalf("BuildAgentPrompt() missing ownership constraint %q:\n%s", want, got)
+	got := BuildAgentPrompt(input)
+
+	want := "do not re-describe"
+	if !strings.Contains(got.UserMsg, want) {
+		t.Fatalf("BuildAgentPrompt() missing ownership constraint %q:\n%s", want, got.UserMsg)
 	}
 }

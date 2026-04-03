@@ -13,9 +13,6 @@
         "--config",
         "${workspaceFolder}/config.yaml"
       ],
-      "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
-      },
       "console": "integratedTerminal",
       "preLaunchTask": "wikismit: clean artifacts before debug"
     },
@@ -36,7 +33,7 @@
         "${workspaceFolder}/artifacts"
       ],
       "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+        "WIKISMIT_OPENAI_API_KEY": "${env:WIKISMIT_OPENAI_API_KEY}"
       },
       "console": "integratedTerminal",
       "preLaunchTask": "wikismit: clean artifacts before debug"
@@ -54,7 +51,7 @@
         "${workspaceFolder}/config.yaml"
       ],
       "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+        "WIKISMIT_OPENAI_API_KEY": "${env:WIKISMIT_OPENAI_API_KEY}"
       },
       "console": "integratedTerminal",
       "preLaunchTask": "wikismit: clean artifacts before debug"
@@ -73,7 +70,7 @@
         "--verbose"
       ],
       "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+        "WIKISMIT_OPENAI_API_KEY": "${env:WIKISMIT_OPENAI_API_KEY}"
       },
       "console": "integratedTerminal",
       "preLaunchTask": "wikismit: clean artifacts before debug"
@@ -91,7 +88,7 @@
         "${workspaceFolder}/config.yaml"
       ],
       "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+        "WIKISMIT_OPENAI_API_KEY": "${env:WIKISMIT_OPENAI_API_KEY}"
       },
       "console": "integratedTerminal"
     },
@@ -108,7 +105,7 @@
         "${workspaceFolder}/config.yaml"
       ],
       "env": {
-        "OPENAI_API_KEY": "${env:OPENAI_API_KEY}"
+        "WIKISMIT_OPENAI_API_KEY": "${env:WIKISMIT_OPENAI_API_KEY}"
       },
       "console": "integratedTerminal",
       "preLaunchTask": "wikismit: clean artifacts before debug"

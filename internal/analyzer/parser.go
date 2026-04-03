@@ -9,7 +9,7 @@ import (
 
 type LanguageParser interface {
 	Extensions() []string
-	ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+	ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 }
 
 var registry = map[string]LanguageParser{}
@@ -17,7 +17,7 @@ var registry = map[string]LanguageParser{}
 func init() {
 	lang.SetGoParserRegister(func(parser interface {
 		Extensions() []string
-		ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+		ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 	}) {
 		Register(parser)
 	})

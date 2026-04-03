@@ -1,0 +1,3 @@
+# errors
+
+Shared error helpers.

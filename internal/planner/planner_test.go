@@ -38,7 +38,7 @@ func samplePlannerConfig(t *testing.T) *configpkg.Config {
 func samplePlannerIndex() store.FileIndex {
 	return store.FileIndex{
 		"internal/auth/jwt.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
@@ -216,7 +216,7 @@ func TestRunPlannerRejectsDuplicateModuleIDs(t *testing.T) {
 	idx := store.FileIndex{
 		"internal/auth/jwt.go": samplePlannerIndex()["internal/auth/jwt.go"],
 		"internal/auth/session.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "StartSession",
 				Signature: "func StartSession() string",
 				LineStart: 12,
@@ -287,7 +287,7 @@ func TestRunPlannerVerboseLoggingIncludesPromptSizingAndAttemptMetadataBeforeEac
 	}
 	callCount := 0
 
-	client := stubPlannerClient{complete: func(ctx context.Context, req llm.CompletionRequest) (string, error) {
+	client := stubPlannerClient{complete: func(ctx context.Context, req *llm.CompletionRequest) (string, error) {
 		_ = ctx
 		callCount++
 
@@ -444,10 +444,14 @@ func (l *plannerBufferLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
-type stubPlannerClient struct {
-	complete func(context.Context, llm.CompletionRequest) (string, error)
+func (l *plannerBufferLogger) Fault(msg string, fields ...any) {
+	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
-func (s stubPlannerClient) Complete(ctx context.Context, req llm.CompletionRequest) (string, error) {
+type stubPlannerClient struct {
+	complete func(context.Context, *llm.CompletionRequest) (string, error)
+}
+
+func (s stubPlannerClient) Complete(ctx context.Context, req *llm.CompletionRequest) (string, error) {
 	return s.complete(ctx, req)
 }

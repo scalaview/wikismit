@@ -13,11 +13,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type moduleRunner func(context.Context, store.Module, AgentInput) ModuleDoc
+type moduleRunner func(context.Context, *store.Module, *AgentInput) *ModuleDoc
 
 type Phase4Error struct {
 	Total    int
-	Failures []ModuleDoc
+	Failures []*ModuleDoc
 }
 
 func (e *Phase4Error) Error() string {
@@ -42,14 +42,14 @@ func (e *Phase4Error) Summary() string {
 	return formatPhase4Summary(e.Total, e.Failures)
 }
 
-func Run(ctx context.Context, modules []store.Module, input AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
-	return runScheduler(ctx, modules, input, concurrency, func(ctx context.Context, module store.Module, input AgentInput) ModuleDoc {
+func Run(ctx context.Context, modules []*store.Module, input *AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	return runScheduler(ctx, modules, input, concurrency, func(ctx context.Context, module *store.Module, input *AgentInput) *ModuleDoc {
 		return runAgent(ctx, module, input, client)
 	}, artifactsDir)
 }
 
-func RunFor(ctx context.Context, modules []store.Module, input AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
-	filtered := make([]store.Module, 0, len(modules))
+func RunFor(ctx context.Context, modules []*store.Module, input *AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	filtered := make([]*store.Module, 0, len(modules))
 	for _, module := range modules {
 		if module.Owner != "agent" {
 			continue
@@ -62,12 +62,12 @@ func RunFor(ctx context.Context, modules []store.Module, input AgentInput, clien
 	return Run(ctx, filtered, input, client, artifactsDir, concurrency)
 }
 
-func runScheduler(ctx context.Context, modules []store.Module, input AgentInput, concurrency int, runner moduleRunner, artifactsDir string) error {
+func runScheduler(ctx context.Context, modules []*store.Module, input *AgentInput, concurrency int, runner moduleRunner, artifactsDir string) error {
 	if concurrency < 1 {
 		concurrency = 1
 	}
 
-	results := make(chan ModuleDoc, len(modules))
+	results := make(chan *ModuleDoc, len(modules))
 	errGroup, _ := errgroup.WithContext(ctx)
 	errGroup.SetLimit(concurrency)
 
@@ -96,13 +96,13 @@ func runScheduler(ctx context.Context, modules []store.Module, input AgentInput,
 	return nil
 }
 
-func collectResults(results <-chan ModuleDoc, artifactsDir string) ([]ModuleDoc, error) {
+func collectResults(results <-chan *ModuleDoc, artifactsDir string) ([]*ModuleDoc, error) {
 	moduleDocsDir := filepath.Join(artifactsDir, "module_docs")
 	if err := os.MkdirAll(moduleDocsDir, 0o755); err != nil {
 		return nil, err
 	}
 
-	var failures []ModuleDoc
+	var failures []*ModuleDoc
 	for result := range results {
 		if result.Err != nil {
 			failures = append(failures, result)
@@ -118,11 +118,11 @@ func collectResults(results <-chan ModuleDoc, artifactsDir string) ([]ModuleDoc,
 	return failures, nil
 }
 
-func formatSchedulerFailure(total int, failures []ModuleDoc) error {
+func formatSchedulerFailure(total int, failures []*ModuleDoc) error {
 	if len(failures) == 0 {
 		return nil
 	}
 
-	cloned := append([]ModuleDoc(nil), failures...)
+	cloned := append([]*ModuleDoc(nil), failures...)
 	return &Phase4Error{Total: total, Failures: cloned}
 }

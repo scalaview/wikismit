@@ -8,7 +8,7 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func writeSharedModuleMarkdown(artifactsDir string, moduleID string, summary store.SharedSummary) error {
+func writeSharedModuleMarkdown(artifactsDir string, moduleID string, summary *store.SharedSummary) error {
 	moduleDocsDir := filepath.Join(artifactsDir, "module_docs")
 	if err := os.MkdirAll(moduleDocsDir, 0o755); err != nil {
 		return err
@@ -16,7 +16,7 @@ func writeSharedModuleMarkdown(artifactsDir string, moduleID string, summary sto
 	return os.WriteFile(filepath.Join(moduleDocsDir, moduleID+".md"), []byte(renderSharedModuleMarkdown(moduleID, summary)), 0o644)
 }
 
-func renderSharedModuleMarkdown(moduleID string, summary store.SharedSummary) string {
+func renderSharedModuleMarkdown(moduleID string, summary *store.SharedSummary) string {
 	var b strings.Builder
 	b.WriteString("# ")
 	b.WriteString(moduleID)

@@ -1,6 +1,7 @@
 package lang
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,6 +18,15 @@ const simpleGoQuery = `
   name: (identifier) @function.name) @function.decl
 
 (method_declaration
+  receiver: (parameter_list
+    (parameter_declaration
+      type: (type_identifier) @method.receiver))
+  name: (field_identifier) @method.name) @method.decl
+
+(method_declaration
+  receiver: (parameter_list
+    (parameter_declaration
+      type: (pointer_type (type_identifier) @method.receiver)))
   name: (field_identifier) @method.name) @method.decl
 
 (type_spec
@@ -29,26 +39,42 @@ const simpleGoQuery = `
 
 (import_spec
   path: (interpreted_string_literal) @import.path) @import.decl
+
+(call_expression
+  function: (identifier) @call.name) @call.expr
+
+(call_expression
+  function: (selector_expression
+    operand: (identifier) @call.receiver
+    field: (field_identifier) @call.method)) @call.expr
 `
 
-type goParser struct{}
+type goParser struct {
+	extractors []Extractor
+}
 
 var registerGoParser func(interface {
 	Extensions() []string
-	ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+	ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 })
 
 func SetGoParserRegister(register func(interface {
 	Extensions() []string
-	ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+	ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 })) {
 	registerGoParser = register
 	if registerGoParser != nil {
-		registerGoParser(&goParser{})
+		registerGoParser(newGoParser())
 	}
 }
 
-func newGoParser() *sitter.Parser {
+func newGoParser() *goParser {
+	return &goParser{
+		extractors: NewExtractors(),
+	}
+}
+
+func newTreeSitterParser() *sitter.Parser {
 	parser := sitter.NewParser()
 	language := sitter.NewLanguage(treeSitterGo.Language())
 	if err := parser.SetLanguage(language); err != nil {
@@ -62,9 +88,10 @@ func (p *goParser) Extensions() []string {
 	return []string{".go"}
 }
 
-func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, error) {
-	parser := newGoParser()
+func (p *goParser) ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error) {
+	parser := newTreeSitterParser()
 	defer parser.Close()
+	srcSplitter := newSrcSplitter(src)
 
 	tree := parser.Parse(src, nil)
 	defer tree.Close()
@@ -81,82 +108,53 @@ func (p *goParser) ExtractSymbols(path string, src []byte) (store.FileEntry, err
 	queryCursor := sitter.NewQueryCursor()
 	defer queryCursor.Close()
 
-	functions := []store.FunctionDecl{}
-	types := []store.TypeDecl{}
-	imports := []store.Import{}
+	entry := store.FileEntry{
+		Language:    "go",
+		ContentHash: contentHash(src),
+		Functions:   make([]*store.FunctionDecl, 0),
+		Types:       make([]*store.TypeDecl, 0),
+		Imports:     make([]*store.Import, 0),
+		Path:        path,
+	}
 
 	matches := queryCursor.Matches(query, tree.RootNode(), src)
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		captureMap := capturesByName(query, match)
 
-		if functionNode, ok := captureMap["function.decl"]; ok {
-			nameNode := captureMap["function.name"]
-			name := nameNode.Utf8Text(src)
-			functions = append(functions, store.FunctionDecl{
-				Name:      name,
-				Signature: sourceForNode(src, functionNode),
-				LineStart: lineNumber(functionNode.StartPosition()),
-				LineEnd:   lineNumber(functionNode.EndPosition()),
-				Exported:  isExported(name),
-			})
-			continue
-		}
-
-		if methodNode, ok := captureMap["method.decl"]; ok {
-			nameNode := captureMap["method.name"]
-			name := nameNode.Utf8Text(src)
-			functions = append(functions, store.FunctionDecl{
-				Name:      name,
-				Signature: sourceForNode(src, methodNode),
-				LineStart: lineNumber(methodNode.StartPosition()),
-				LineEnd:   lineNumber(methodNode.EndPosition()),
-				Exported:  isExported(name),
-			})
-			continue
-		}
-
-		if typeNode, ok := captureMap["type.decl"]; ok {
-			nameNode := captureMap["type.name"]
-			kindNode := captureMap["type.kind"]
-			name := nameNode.Utf8Text(src)
-			types = append(types, store.TypeDecl{
-				Name:      name,
-				Kind:      typeKind(kindNode),
-				LineStart: lineNumber(typeNode.StartPosition()),
-				LineEnd:   lineNumber(typeNode.EndPosition()),
-				Exported:  isExported(name),
-			})
-			continue
-		}
-
-		if aliasNode, ok := captureMap["alias.decl"]; ok {
-			nameNode := captureMap["alias.name"]
-			name := nameNode.Utf8Text(src)
-			types = append(types, store.TypeDecl{
-				Name:      name,
-				Kind:      "alias",
-				LineStart: lineNumber(aliasNode.StartPosition()),
-				LineEnd:   lineNumber(aliasNode.EndPosition()),
-				Exported:  isExported(name),
-			})
-			continue
-		}
-
-		if importNode, ok := captureMap["import.path"]; ok {
-			imports = append(imports, store.Import{
-				Path:     strings.Trim(importNode.Utf8Text(src), `"`),
-				Internal: false,
-			})
+		for _, extractor := range p.extractors {
+			if extractor.Execute(captureMap, src, &entry, relPath, srcSplitter) {
+				continue
+			}
 		}
 	}
 
-	return store.FileEntry{
-		Language:    "go",
-		ContentHash: contentHash(src),
-		Functions:   functions,
-		Types:       types,
-		Imports:     imports,
-	}, nil
+	return entry, nil
+}
+
+type srcSplitter struct {
+	lines [][]byte
+}
+
+func newSrcSplitter(src []byte) *srcSplitter {
+	return &srcSplitter{
+		lines: bytes.Split(src, []byte("\n")),
+	}
+}
+
+func (s *srcSplitter) extractInnerBodies(start int, end int) string {
+	lines := s.lines
+	var b strings.Builder
+	start = start - 1
+	if end > len(lines) {
+
+		end = len(lines)
+	}
+	for _, line := range lines[start:end] {
+		b.Write(line)
+		b.WriteByte('\n')
+	}
+	b.WriteByte('\n')
+	return b.String()
 }
 
 func contentHash(src []byte) string {

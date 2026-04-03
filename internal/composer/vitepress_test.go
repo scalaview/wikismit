@@ -11,7 +11,7 @@ import (
 )
 
 func TestGenerateVitePressConfigBuildsModulesAndSharedSidebarGroups(t *testing.T) {
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Shared: false},
 		{ID: "api", Shared: false},
 		{ID: "logger", Shared: true},

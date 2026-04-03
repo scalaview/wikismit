@@ -12,21 +12,21 @@ import (
 func TestBuildSymbolMapIncludesFunctionAndTypeRefs(t *testing.T) {
 	// Create a sample FileIndex with both function and type declarations
 	idx := store.FileIndex{
-		"internal/auth/jwt.go": store.FileEntry{
-			Functions: []store.FunctionDecl{
+		"internal/auth/jwt.go": &store.FileEntry{
+			Functions: []*store.FunctionDecl{
 				{Name: "GenerateToken", LineStart: 24, Exported: true},
 				{Name: "validateToken", LineStart: 50, Exported: false},
 			},
-			Types: []store.TypeDecl{
+			Types: []*store.TypeDecl{
 				{Name: "Claims", LineStart: 10, Exported: true},
 				{Name: "privateClaim", LineStart: 15, Exported: false},
 			},
 		},
-		"internal/db/conn.go": store.FileEntry{
-			Functions: []store.FunctionDecl{
+		"internal/db/conn.go": &store.FileEntry{
+			Functions: []*store.FunctionDecl{
 				{Name: "Connect", LineStart: 5, Exported: true},
 			},
-			Types: []store.TypeDecl{
+			Types: []*store.TypeDecl{
 				{Name: "Config", LineStart: 1, Exported: true},
 			},
 		},
@@ -122,13 +122,13 @@ func TestInjectCitationsSkipsLowercaseIdentifiers(t *testing.T) {
 func TestBuildSymbolMapPrefersExportedSymbolForAmbiguousName(t *testing.T) {
 	idx := store.FileIndex{
 		"pkg/beta/exported.go": {
-			Functions: []store.FunctionDecl{{Name: "Normalize", LineStart: 20, Exported: true}},
+			Functions: []*store.FunctionDecl{{Name: "Normalize", LineStart: 20, Exported: true}},
 		},
 		"pkg/alpha/unexported.go": {
-			Functions: []store.FunctionDecl{{Name: "Normalize", LineStart: 10, Exported: false}},
+			Functions: []*store.FunctionDecl{{Name: "Normalize", LineStart: 10, Exported: false}},
 		},
 		"pkg/alpha/exported.go": {
-			Functions: []store.FunctionDecl{{Name: "Normalize", LineStart: 5, Exported: true}},
+			Functions: []*store.FunctionDecl{{Name: "Normalize", LineStart: 5, Exported: true}},
 		},
 	}
 

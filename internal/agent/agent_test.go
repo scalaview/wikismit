@@ -13,15 +13,15 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func sampleRunAgentInput() AgentInput {
-	return AgentInput{
-		Module: store.Module{
+func sampleRunAgentInput() *AgentInput {
+	return &AgentInput{
+		Module: &store.Module{
 			ID:    "auth",
 			Files: []string{"internal/auth/jwt.go"},
 		},
 		FileIndex: store.FileIndex{
 			"internal/auth/jwt.go": {
-				Functions: []store.FunctionDecl{{
+				Functions: []*store.FunctionDecl{{
 					Name:      "GenerateToken",
 					Signature: "func GenerateToken() string",
 					LineStart: 12,
@@ -99,7 +99,7 @@ func TestRunAgentLogsCompletionTiming(t *testing.T) {
 }
 
 func TestFormatPhase4SummaryIncludesFailuresOnlyWhenPresent(t *testing.T) {
-	withFailures := formatPhase4Summary(3, []ModuleDoc{{ModuleID: "billing", Err: errors.New("boom")}})
+	withFailures := formatPhase4Summary(3, []*ModuleDoc{{ModuleID: "billing", Err: errors.New("boom")}})
 	if !strings.Contains(withFailures, "Phase 4 complete: 2/3 modules documented") {
 		t.Fatalf("summary = %q, want success count", withFailures)
 	}
@@ -121,7 +121,7 @@ func TestFormatPhase4SummaryIncludesFailuresOnlyWhenPresent(t *testing.T) {
 
 func TestPhase4PartialFailureWritesOnlySuccessfulModuleDocs(t *testing.T) {
 	artifactsDir := t.TempDir()
-	modules := []store.Module{{ID: "auth"}, {ID: "billing"}}
+	modules := []*store.Module{{ID: "auth"}, {ID: "billing"}}
 	input := sampleRunAgentInput()
 	input.Config.ArtifactsDir = artifactsDir
 	client := llm.NewMockClient("# Auth module").WithErrors(nil, errors.New("boom"))

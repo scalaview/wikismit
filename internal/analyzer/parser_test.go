@@ -17,7 +17,7 @@ func (p *testParser) Extensions() []string {
 	return p.extensions
 }
 
-func (p *testParser) ExtractSymbols(path string, src []byte) (store.FileEntry, error) {
+func (p *testParser) ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error) {
 	return store.FileEntry{}, nil
 }
 
@@ -60,14 +60,14 @@ func TestRegisterRejectsDuplicateExtension(t *testing.T) {
 
 func TestTypeDeclCarriesLineEnd(t *testing.T) {
 	entry := store.FileEntry{
-		Types: []store.TypeDecl{{
+		Types: []*store.TypeDecl{{
 			Name:      "Widget",
 			Kind:      "struct",
 			LineStart: 3,
 			LineEnd:   8,
 			Exported:  true,
 		}},
-		Imports: []store.Import{{
+		Imports: []*store.Import{{
 			Path:         "github.com/scalaview/wikismit/pkg/store",
 			Internal:     true,
 			ResolvedPath: "pkg/store/artifacts.go",
@@ -96,7 +96,7 @@ func TestGoParserRegistersGoExtension(t *testing.T) {
 
 	lang.SetGoParserRegister(func(parser interface {
 		Extensions() []string
-		ExtractSymbols(path string, src []byte) (store.FileEntry, error)
+		ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
 	}) {
 		Register(parser)
 	})

@@ -241,7 +241,7 @@ func RunPreprocessor(ctx context.Context, plan *store.NavPlan, idx store.FileInd
 	return runPreprocessor(ctx, nil, plan, idx, graph, cfg, client)
 }
 
-func RunPreprocessorFor(ctx context.Context, affected []store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+func RunPreprocessorFor(ctx context.Context, affected []*store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
 	affectedSet := make(map[string]bool, len(affected))
 	for _, module := range affected {
 		if module.Owner != "shared_preprocessor" && !module.Shared {
@@ -273,7 +273,7 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 	if affectedSet != nil {
 		loaded, err := store.ReadSharedContext(cfg.ArtifactsDir)
 		if err != nil && err != store.ErrArtifactNotFound {
-			return nil, err
+			return store.SharedContext{}, err
 		}
 		if err == nil {
 			existing = loaded
@@ -322,7 +322,7 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 				}
 			}
 			prompt := buildSharedPrompt(moduleID, skeleton, directDeps)
-			response, err := client.Complete(ctx, llm.CompletionRequest{
+			response, err := client.Complete(ctx, &llm.CompletionRequest{
 				Model:       model,
 				UserMsg:     prompt,
 				MaxTokens:   cfg.LLM.MaxTokens,
@@ -336,7 +336,7 @@ func runPreprocessor(ctx context.Context, affectedSet map[string]bool, plan *sto
 			if err := llm.ParseJSON(response, &summary); err != nil {
 				return nil, err
 			}
-			sharedCtx[moduleID] = groundSharedSummaryRefs(summary, files, idx)
+			sharedCtx[moduleID] = groundSharedSummaryRefs(&summary, files, idx)
 			if err := writeSharedModuleMarkdown(cfg.ArtifactsDir, moduleID, sharedCtx[moduleID]); err != nil {
 				return nil, fmt.Errorf("write shared module markdown for %s: %w", moduleID, err)
 			}

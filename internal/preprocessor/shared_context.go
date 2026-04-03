@@ -10,9 +10,9 @@ import (
 
 var sharedLogger logpkg.Logger = logpkg.New(false)
 
-func groundSharedSummaryRefs(summary store.SharedSummary, moduleFiles []string, idx store.FileIndex) store.SharedSummary {
+func groundSharedSummaryRefs(summary *store.SharedSummary, moduleFiles []string, idx store.FileIndex) *store.SharedSummary {
 	grounded := summary
-	grounded.KeyFunctions = append([]store.KeyFunction(nil), summary.KeyFunctions...)
+	grounded.KeyFunctions = append([]*store.KeyFunction(nil), summary.KeyFunctions...)
 	sortedFiles := append([]string(nil), moduleFiles...)
 	sort.Strings(sortedFiles)
 

@@ -10,34 +10,36 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func runAgent(ctx context.Context, module store.Module, input AgentInput, client llm.Client) ModuleDoc {
+func runAgent(ctx context.Context, module *store.Module, input *AgentInput, client llm.Client) *ModuleDoc {
 	return runAgentWithLogger(ctx, module, input, client, nil)
 }
 
-func runAgentWithLogger(ctx context.Context, module store.Module, input AgentInput, client llm.Client, logf func(level, msg string, fields ...any)) ModuleDoc {
+func runAgentWithLogger(ctx context.Context, module *store.Module, input *AgentInput, client llm.Client, logf func(level, msg string, fields ...any)) *ModuleDoc {
 	requestInput := input
 	requestInput.Module = module
 	start := time.Now()
+	promptData := BuildAgentPrompt(requestInput)
 
-	content, err := client.Complete(ctx, llm.CompletionRequest{
+	content, err := client.Complete(ctx, &llm.CompletionRequest{
 		Model:     input.Config.LLM.AgentModel,
-		UserMsg:   BuildAgentPrompt(requestInput),
+		SystemMsg: promptData.SystemMsg,
+		UserMsg:   promptData.UserMsg,
 		MaxTokens: input.Config.LLM.MaxTokens,
 	})
 	if err != nil {
 		if logf != nil {
 			logf("ERROR", fmt.Sprintf("Phase 4: module %s failed in %s: %v", module.ID, time.Since(start), err))
 		}
-		return ModuleDoc{ModuleID: module.ID, Err: err}
+		return &ModuleDoc{ModuleID: module.ID, Err: err}
 	}
 	if logf != nil {
 		logf("INFO", fmt.Sprintf("Phase 4: module %s completed in %s", module.ID, time.Since(start)))
 	}
 
-	return ModuleDoc{ModuleID: module.ID, Content: content}
+	return &ModuleDoc{ModuleID: module.ID, Content: content}
 }
 
-func formatPhase4Summary(total int, failures []ModuleDoc) string {
+func formatPhase4Summary(total int, failures []*ModuleDoc) string {
 	successCount := total - len(failures)
 	sections := []string{fmt.Sprintf("Phase 4 complete: %d/%d modules documented", successCount, total)}
 	if len(failures) == 0 {

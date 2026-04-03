@@ -80,7 +80,7 @@ func (a *Analyzer) ensureModulePath(repoPath string) error {
 
 func (a *Analyzer) resolveImports(repoPath string, entry *store.FileEntry) error {
 	for idx := range entry.Imports {
-		imp := &entry.Imports[idx]
+		imp := entry.Imports[idx]
 
 		matchedModulePath, matchedDir := a.findModuleForImport(imp.Path)
 		if matchedModulePath == "" {
@@ -222,8 +222,8 @@ func ResolveImportPaths(repoPath string, cfg configpkg.AnalysisConfig, idx store
 	resolved := make(store.FileIndex, len(idx))
 	for path, entry := range idx {
 		entryCopy := entry
-		entryCopy.Imports = append([]store.Import(nil), entry.Imports...)
-		if err := analyzer.resolveImports(repoPath, &entryCopy); err != nil {
+		entryCopy.Imports = append([]*store.Import(nil), entry.Imports...)
+		if err := analyzer.resolveImports(repoPath, entryCopy); err != nil {
 			return nil, err
 		}
 		resolved[path] = entryCopy

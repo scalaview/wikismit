@@ -15,7 +15,7 @@ import (
 func sampleGroundingIndex() store.FileIndex {
 	return store.FileIndex{
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -64,8 +64,8 @@ func TestBuildSharedPromptInjectsAlreadySummarisedDependencies(t *testing.T) {
 }
 
 func TestGroundSharedSummaryRefsUsesFileIndexLineNumbers(t *testing.T) {
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "func New() Logger",
 			Ref:       "some/other/place.go#L999",
@@ -83,8 +83,8 @@ func TestGroundSharedSummaryRefsUsesFileIndexLineNumbers(t *testing.T) {
 }
 
 func TestGroundSharedSummaryRefsKeepsUnknownRefAndWarns(t *testing.T) {
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "Missing",
 			Signature: "func Missing()",
 			Ref:       "pkg/logger/logger.go#L999",
@@ -104,7 +104,7 @@ func TestGroundSharedSummaryRefsKeepsUnknownRefAndWarns(t *testing.T) {
 func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T) {
 	idx := store.FileIndex{
 		"pkg/alpha/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Alpha",
 				LineStart: 7,
@@ -112,7 +112,7 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 			}},
 		},
 		"pkg/zeta/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New(cfg Config) Zeta",
 				LineStart: 21,
@@ -120,8 +120,8 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 			}},
 		},
 	}
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "func New(cfg Config) Zeta",
 			Ref:       "wrong.go#L1",
@@ -138,7 +138,7 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *testing.T) {
 	idx := store.FileIndex{
 		"pkg/alpha/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Alpha",
 				LineStart: 7,
@@ -146,7 +146,7 @@ func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *test
 			}},
 		},
 		"pkg/zeta/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Zeta",
 				LineStart: 21,
@@ -154,8 +154,8 @@ func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *test
 			}},
 		},
 	}
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "",
 			Ref:       "wrong.go#L1",
@@ -186,7 +186,7 @@ func samplePreprocessorConfig(t *testing.T) *configpkg.Config {
 func samplePreprocessorIndex() store.FileIndex {
 	return store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -194,7 +194,7 @@ func samplePreprocessorIndex() store.FileIndex {
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -206,7 +206,7 @@ func samplePreprocessorIndex() store.FileIndex {
 
 func samplePreprocessorPlan() *store.NavPlan {
 	return &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 		},
@@ -215,7 +215,7 @@ func samplePreprocessorPlan() *store.NavPlan {
 
 func sampleNoSharedPlan() *store.NavPlan {
 	return &store.NavPlan{
-		Modules: []store.Module{{
+		Modules: []*store.Module{{
 			ID:     "auth",
 			Files:  []string{"internal/auth/jwt.go"},
 			Shared: false,
@@ -267,7 +267,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 	cfg := samplePreprocessorConfig(t)
 	idx := store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -275,7 +275,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -283,7 +283,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 			}},
 		},
 		"pkg/config/config.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Load",
 				Signature: "func Load(path string) Config",
 				LineStart: 25,
@@ -292,7 +292,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 		},
 	}
 	plan := &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},
@@ -336,7 +336,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 	cfg := samplePreprocessorConfig(t)
 	idx := store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -344,7 +344,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -352,7 +352,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 			}},
 		},
 		"pkg/config/config.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Load",
 				Signature: "func Load() Config",
 				LineStart: 25,
@@ -361,7 +361,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 		},
 	}
 	plan := &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},

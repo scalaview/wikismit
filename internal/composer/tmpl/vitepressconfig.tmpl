@@ -1,0 +1,36 @@
+import { defineConfig } from 'vitepress'
+/**
+ * npm add -D vitepress@next
+ * npm i vitepress-mermaid-renderer
+ * npm run docs:build
+ * npm run docs:preview
+ */
+export default defineConfig({
+  title: '{{ .Title }}',
+  ignoreDeadLinks: true,
+  themeConfig: {
+{{- if .HasEditLink }}
+    editLink: {
+      pattern: '{{ .RepoURL }}/edit/main/:path',
+    },
+{{- end }}
+    sidebar: [
+      {
+        text: 'Modules',
+        items: [
+{{- range .Modules }}
+          { text: '{{ .Text }}', link: '{{ .Link }}' },
+{{- end }}
+        ],
+      },
+      {
+        text: 'Shared',
+        items: [
+{{- range .Shared }}
+          { text: '{{ .Text }}', link: '{{ .Link }}' },
+{{- end }}
+        ],
+      },
+    ],
+  },
+})

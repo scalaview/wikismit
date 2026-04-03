@@ -30,7 +30,7 @@ func TestClientCompleteReturnsResponseContent(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	got, err := client.Complete(context.Background(), CompletionRequest{
+	got, err := client.Complete(context.Background(), &CompletionRequest{
 		SystemMsg:   "system",
 		UserMsg:     "user",
 		MaxTokens:   100,
@@ -59,7 +59,7 @@ func TestClientCompleteMaps401ToNonRetryableLLMError(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	_, err = client.Complete(context.Background(), CompletionRequest{UserMsg: "user"})
+	_, err = client.Complete(context.Background(), &CompletionRequest{UserMsg: "user"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want LLMError")
 	}
@@ -87,7 +87,7 @@ func TestClientCompleteMaps500ToRetryableLLMError(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	_, err = client.Complete(context.Background(), CompletionRequest{UserMsg: "user"})
+	_, err = client.Complete(context.Background(), &CompletionRequest{UserMsg: "user"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want LLMError")
 	}
@@ -120,7 +120,7 @@ func TestClientCompleteMapsTimeoutToRetryableLLMError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err = client.Complete(ctx, CompletionRequest{UserMsg: "user"})
+	_, err = client.Complete(ctx, &CompletionRequest{UserMsg: "user"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want timeout-based LLMError")
 	}
@@ -148,7 +148,7 @@ func TestClientCompleteVerboseLoggingIncludesRequestMetadata(t *testing.T) {
 	}, true, buf)
 
 	userPrompt := "summarize this repository"
-	_, err := client.Complete(context.Background(), CompletionRequest{
+	_, err := client.Complete(context.Background(), &CompletionRequest{
 		SystemMsg:   "system instructions should stay private",
 		UserMsg:     userPrompt,
 		MaxTokens:   123,
@@ -199,7 +199,7 @@ func TestClientCompleteVerboseLoggingIncludesErrorTypeOnFailure(t *testing.T) {
 		TimeoutSeconds: 2,
 	}, true, buf)
 
-	_, err := client.Complete(context.Background(), CompletionRequest{UserMsg: "user prompt"})
+	_, err := client.Complete(context.Background(), &CompletionRequest{UserMsg: "user prompt"})
 	if err == nil {
 		t.Fatal("Complete() error = nil, want LLMError")
 	}
@@ -231,7 +231,7 @@ func TestClientCompleteWithoutVerboseDoesNotEmitDebugLogs(t *testing.T) {
 		TimeoutSeconds: 2,
 	}, false, buf)
 
-	_, err := client.Complete(context.Background(), CompletionRequest{UserMsg: "quiet prompt", MaxTokens: 10})
+	_, err := client.Complete(context.Background(), &CompletionRequest{UserMsg: "quiet prompt", MaxTokens: 10})
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
@@ -286,6 +286,10 @@ func (l *bufferLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
+func (l *bufferLogger) Fault(msg string, fields ...any) {
+	l.inner.ErrorContext(context.Background(), msg, fields...)
+}
+
 func TestClientCompleteAccumulatesMultipleContinuations(t *testing.T) {
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -310,7 +314,7 @@ func TestClientCompleteAccumulatesMultipleContinuations(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	got, err := client.Complete(context.Background(), CompletionRequest{
+	got, err := client.Complete(context.Background(), &CompletionRequest{
 		SystemMsg:   "system",
 		UserMsg:     "user",
 		MaxTokens:   100,
@@ -342,7 +346,7 @@ func TestClientCompleteCapsContinuationsAtFiveAndLogsWarning(t *testing.T) {
 		TimeoutSeconds: 1,
 	}, true, buf)
 
-	got, err := client.Complete(context.Background(), CompletionRequest{
+	got, err := client.Complete(context.Background(), &CompletionRequest{
 		SystemMsg:   "system",
 		UserMsg:     "user",
 		MaxTokens:   100,
