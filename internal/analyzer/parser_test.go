@@ -60,14 +60,14 @@ func TestRegisterRejectsDuplicateExtension(t *testing.T) {
 
 func TestTypeDeclCarriesLineEnd(t *testing.T) {
 	entry := store.FileEntry{
-		Types: []store.TypeDecl{{
+		Types: []*store.TypeDecl{{
 			Name:      "Widget",
 			Kind:      "struct",
 			LineStart: 3,
 			LineEnd:   8,
 			Exported:  true,
 		}},
-		Imports: []store.Import{{
+		Imports: []*store.Import{{
 			Path:         "github.com/scalaview/wikismit/pkg/store",
 			Internal:     true,
 			ResolvedPath: "pkg/store/artifacts.go",

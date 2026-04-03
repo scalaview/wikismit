@@ -38,7 +38,7 @@ func samplePlannerConfig(t *testing.T) *configpkg.Config {
 func samplePlannerIndex() store.FileIndex {
 	return store.FileIndex{
 		"internal/auth/jwt.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
@@ -216,7 +216,7 @@ func TestRunPlannerRejectsDuplicateModuleIDs(t *testing.T) {
 	idx := store.FileIndex{
 		"internal/auth/jwt.go": samplePlannerIndex()["internal/auth/jwt.go"],
 		"internal/auth/session.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "StartSession",
 				Signature: "func StartSession() string",
 				LineStart: 12,

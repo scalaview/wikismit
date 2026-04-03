@@ -21,7 +21,7 @@ func sampleRunAgentInput() AgentInput {
 		},
 		FileIndex: store.FileIndex{
 			"internal/auth/jwt.go": {
-				Functions: []store.FunctionDecl{{
+				Functions: []*store.FunctionDecl{{
 					Name:      "GenerateToken",
 					Signature: "func GenerateToken() string",
 					LineStart: 12,

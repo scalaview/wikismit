@@ -322,8 +322,8 @@ func TestRunPreprocessorForRerunsOnlyAffectedSharedModules(t *testing.T) {
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
 	idx := store.FileIndex{
-		"pkg/errors/errors.go": {Functions: []store.FunctionDecl{{Name: "Wrap", Signature: "func Wrap(err error) error", LineStart: 11, Exported: true}}},
-		"pkg/logger/logger.go": {Functions: []store.FunctionDecl{{Name: "New", Signature: "func New() Logger", LineStart: 18, Exported: true}}},
+		"pkg/errors/errors.go": {Functions: []*store.FunctionDecl{{Name: "Wrap", Signature: "func Wrap(err error) error", LineStart: 11, Exported: true}}},
+		"pkg/logger/logger.go": {Functions: []*store.FunctionDecl{{Name: "New", Signature: "func New() Logger", LineStart: 18, Exported: true}}},
 	}
 	graph := store.DepGraph{
 		"pkg/errors/errors.go": {},

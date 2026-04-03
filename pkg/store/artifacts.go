@@ -4,23 +4,46 @@ import "time"
 
 type FileIndex map[string]FileEntry
 
+type OwnerShipType int
+type FunctionType int
+
+const (
+	OwnershipInternal OwnerShipType = iota
+	OwnershipExternal
+)
+
+const (
+	FunctionTypeRegular FunctionType = iota
+	FunctionTypeMethod
+)
+
+type CallRef struct {
+	Name      string        `json:"name"`
+	Receiver  string        `json:"receiver,omitempty"`
+	Line      int           `json:"line"`
+	Ownership OwnerShipType `json:"ownership"`
+}
+
 type FileEntry struct {
-	Language    string         `json:"language"`
-	ContentHash string         `json:"content_hash"`
-	Functions   []FunctionDecl `json:"functions"`
-	Types       []TypeDecl     `json:"types"`
-	Imports     []Import       `json:"imports"`
-	Path        string         `json:"path"`
+	Language    string          `json:"language"`
+	ContentHash string          `json:"content_hash"`
+	Functions   []*FunctionDecl `json:"functions"`
+	Types       []*TypeDecl     `json:"types"`
+	Imports     []*Import       `json:"imports"`
+	Path        string          `json:"path"`
 }
 
 type FunctionDecl struct {
-	Name      string `json:"name"`
-	Signature string `json:"signature"`
-	LineStart int    `json:"line_start"`
-	LineEnd   int    `json:"line_end"`
-	Exported  bool   `json:"exported"`
-	Src       string `json:"src"`
-	Path      string `json:"path"`
+	Name         string       `json:"name"`
+	Signature    string       `json:"signature"`
+	LineStart    int          `json:"line_start"`
+	LineEnd      int          `json:"line_end"`
+	Exported     bool         `json:"exported"`
+	Receiver     string       `json:"receiver,omitempty"`
+	FunctionType FunctionType `json:"function_type"`
+	Src          string       `json:"src"`
+	Path         string       `json:"path"`
+	Summary      string       `json:"summary,omitempty"`
 }
 
 type TypeDecl struct {

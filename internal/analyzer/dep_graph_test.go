@@ -277,7 +277,7 @@ func TestResolveImportsMarksCrossModuleImportAsInternal(t *testing.T) {
 	}
 
 	entry := &store.FileEntry{
-		Imports: []store.Import{
+		Imports: []*store.Import{
 			{Path: "github.com/org/shared/pkg/utils"},
 		},
 	}
@@ -305,7 +305,7 @@ func TestResolveImportsSkipsExternalImportsInWorkspace(t *testing.T) {
 	}
 
 	entry := &store.FileEntry{
-		Imports: []store.Import{
+		Imports: []*store.Import{
 			{Path: "fmt"},
 			{Path: "github.com/external/something"},
 		},

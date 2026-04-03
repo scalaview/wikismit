@@ -18,6 +18,15 @@ const simpleGoQuery = `
   name: (identifier) @function.name) @function.decl
 
 (method_declaration
+  receiver: (parameter_list
+    (parameter_declaration
+      type: (type_identifier) @method.receiver))
+  name: (field_identifier) @method.name) @method.decl
+
+(method_declaration
+  receiver: (parameter_list
+    (parameter_declaration
+      type: (pointer_type (type_identifier) @method.receiver)))
   name: (field_identifier) @method.name) @method.decl
 
 (type_spec
@@ -30,9 +39,18 @@ const simpleGoQuery = `
 
 (import_spec
   path: (interpreted_string_literal) @import.path) @import.decl
+
+(call_expression
+  function: (identifier) @call.name) @call.expr
+
+(call_expression
+  function: (selector_expression
+    operand: (identifier) @call.receiver
+    field: (field_identifier) @call.method)) @call.expr
 `
 
 type goParser struct {
+	extractors []Extractor
 }
 
 var registerGoParser func(interface {
@@ -46,7 +64,9 @@ func SetGoParserRegister(register func(interface {
 })) {
 	registerGoParser = register
 	if registerGoParser != nil {
-		registerGoParser(&goParser{})
+		registerGoParser(&goParser{
+			extractors: NewExtractors(),
+		})
 	}
 }
 
@@ -84,91 +104,31 @@ func (p *goParser) ExtractSymbols(path string, relPath string, src []byte) (stor
 	queryCursor := sitter.NewQueryCursor()
 	defer queryCursor.Close()
 
-	functions := []store.FunctionDecl{}
-	types := []store.TypeDecl{}
-	imports := []store.Import{}
+	entry := store.FileEntry{
+		Language:    "go",
+		ContentHash: contentHash(src),
+		Functions:   make([]*store.FunctionDecl, 0),
+		Types:       make([]*store.TypeDecl, 0),
+		Imports:     make([]*store.Import, 0),
+		Path:        path,
+	}
 
 	matches := queryCursor.Matches(query, tree.RootNode(), src)
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		captureMap := capturesByName(query, match)
 
-		if functionNode, ok := captureMap["function.decl"]; ok {
-			nameNode := captureMap["function.name"]
-			name := nameNode.Utf8Text(src)
-			functions = append(functions, store.FunctionDecl{
-				Name:      name,
-				Signature: sourceForNode(src, functionNode),
-				LineStart: lineNumber(functionNode.StartPosition()),
-				LineEnd:   lineNumber(functionNode.EndPosition()),
-				Exported:  isExported(name),
-				Path:      relPath,
-				Src:       srcSplitter.extractInnerBodies(lineNumber(functionNode.StartPosition()), lineNumber(functionNode.EndPosition())),
-			})
-			continue
-		}
-
-		if methodNode, ok := captureMap["method.decl"]; ok {
-			nameNode := captureMap["method.name"]
-			name := nameNode.Utf8Text(src)
-			functions = append(functions, store.FunctionDecl{
-				Name:      name,
-				Signature: sourceForNode(src, methodNode),
-				LineStart: lineNumber(methodNode.StartPosition()),
-				LineEnd:   lineNumber(methodNode.EndPosition()),
-				Exported:  isExported(name),
-				Path:      relPath,
-				Src:       srcSplitter.extractInnerBodies(lineNumber(methodNode.StartPosition()), lineNumber(methodNode.EndPosition())),
-			})
-			continue
-		}
-
-		if typeNode, ok := captureMap["type.decl"]; ok {
-			nameNode := captureMap["type.name"]
-			kindNode := captureMap["type.kind"]
-			name := nameNode.Utf8Text(src)
-			types = append(types, store.TypeDecl{
-				Name:      name,
-				Kind:      typeKind(kindNode),
-				LineStart: lineNumber(typeNode.StartPosition()),
-				LineEnd:   lineNumber(typeNode.EndPosition()),
-				Exported:  isExported(name),
-				Path:      relPath,
-				Src:       srcSplitter.extractInnerBodies(lineNumber(typeNode.StartPosition()), lineNumber(typeNode.EndPosition())),
-			})
-			continue
-		}
-
-		if aliasNode, ok := captureMap["alias.decl"]; ok {
-			nameNode := captureMap["alias.name"]
-			name := nameNode.Utf8Text(src)
-			types = append(types, store.TypeDecl{
-				Name:      name,
-				Kind:      "alias",
-				LineStart: lineNumber(aliasNode.StartPosition()),
-				LineEnd:   lineNumber(aliasNode.EndPosition()),
-				Exported:  isExported(name),
-				Path:      relPath,
-				Src:       srcSplitter.extractInnerBodies(lineNumber(aliasNode.StartPosition()), lineNumber(aliasNode.EndPosition())),
-			})
-			continue
-		}
-
-		if importNode, ok := captureMap["import.path"]; ok {
-			imports = append(imports, store.Import{
-				Path:     strings.Trim(importNode.Utf8Text(src), `"`),
-				Internal: false,
-			})
+		for _, extractor := range p.extractors {
+			if extractor.Execute(captureMap, src, &entry, relPath, srcSplitter) {
+				continue
+			}
 		}
 	}
 
-	return store.FileEntry{
-		Language:    "go",
-		ContentHash: contentHash(src),
-		Functions:   functions,
-		Types:       types,
-		Imports:     imports,
-		Path:        path,
-	}, nil
+	return entry, nil
+}
+
+func (p *goParser) executeExtractors() {
+
 }
 
 type srcSplitter struct {

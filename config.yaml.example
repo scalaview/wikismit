@@ -4,7 +4,7 @@ artifacts_dir: "./artifacts"
 
 llm:
   base_url: "https://open.bigmodel.cn/api/paas/v4"
-  api_key_env: "OPENAI_API_KEY"
+  api_key_env: "WIKISMIT_OPENAI_API_KEY"
   planner_model: "glm-4.7-flashx"
   preprocessor_model: "glm-4.7-flashx"
   agent_model: "glm-4.7-flashx"

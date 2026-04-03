@@ -55,7 +55,7 @@ func (a *Analyzer) Analyze(repoPath string) (store.FileIndex, error) {
 
 	for path, entry := range idx {
 		entryCopy := entry
-		entryCopy.Imports = append([]store.Import(nil), entry.Imports...)
+		entryCopy.Imports = append([]*store.Import(nil), entry.Imports...)
 		if err := a.resolveImports(repoPath, &entryCopy); err != nil {
 			return nil, err
 		}

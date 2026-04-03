@@ -15,7 +15,7 @@ import (
 func sampleGroundingIndex() store.FileIndex {
 	return store.FileIndex{
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -104,7 +104,7 @@ func TestGroundSharedSummaryRefsKeepsUnknownRefAndWarns(t *testing.T) {
 func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T) {
 	idx := store.FileIndex{
 		"pkg/alpha/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Alpha",
 				LineStart: 7,
@@ -112,7 +112,7 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 			}},
 		},
 		"pkg/zeta/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New(cfg Config) Zeta",
 				LineStart: 21,
@@ -138,7 +138,7 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *testing.T) {
 	idx := store.FileIndex{
 		"pkg/alpha/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Alpha",
 				LineStart: 7,
@@ -146,7 +146,7 @@ func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *test
 			}},
 		},
 		"pkg/zeta/new.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Zeta",
 				LineStart: 21,
@@ -186,7 +186,7 @@ func samplePreprocessorConfig(t *testing.T) *configpkg.Config {
 func samplePreprocessorIndex() store.FileIndex {
 	return store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -194,7 +194,7 @@ func samplePreprocessorIndex() store.FileIndex {
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -267,7 +267,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 	cfg := samplePreprocessorConfig(t)
 	idx := store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -275,7 +275,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -283,7 +283,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 			}},
 		},
 		"pkg/config/config.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Load",
 				Signature: "func Load(path string) Config",
 				LineStart: 25,
@@ -336,7 +336,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 	cfg := samplePreprocessorConfig(t)
 	idx := store.FileIndex{
 		"pkg/errors/errors.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Wrap",
 				Signature: "func Wrap(err error) error",
 				LineStart: 11,
@@ -344,7 +344,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 			}},
 		},
 		"pkg/logger/logger.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				LineStart: 18,
@@ -352,7 +352,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 			}},
 		},
 		"pkg/config/config.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Load",
 				Signature: "func Load() Config",
 				LineStart: 25,

@@ -10,7 +10,7 @@ import (
 func samplePlannerFileIndex() store.FileIndex {
 	return store.FileIndex{
 		"internal/auth/jwt.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
@@ -21,7 +21,7 @@ func samplePlannerFileIndex() store.FileIndex {
 				LineStart: 18,
 				Exported:  false,
 			}},
-			Types: []store.TypeDecl{{
+			Types: []*store.TypeDecl{{
 				Name:      "Claims",
 				Kind:      "struct",
 				LineStart: 2,
@@ -34,7 +34,7 @@ func samplePlannerFileIndex() store.FileIndex {
 			}},
 		},
 		"internal/auth/middleware.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Middleware",
 				Signature: "func Middleware()",
 				LineStart: 5,
@@ -135,51 +135,51 @@ func TestBuildFullSkeletonIncludesAllFilesWhenUnderBudget(t *testing.T) {
 func plannerFileIndex() store.FileIndex {
 	return store.FileIndex{
 		"internal/auth/jwt.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
 				Exported:  true,
 			}},
-			Types: []store.TypeDecl{{
+			Types: []*store.TypeDecl{{
 				Name:      "Claims",
 				Kind:      "struct",
 				LineStart: 2,
 				Exported:  true,
 			}},
-			Imports: []store.Import{{
+			Imports: []*store.Import{{
 				Path:         "github.com/example/pkg/crypto",
 				Internal:     true,
 				ResolvedPath: "pkg/crypto/hash.go",
 			}},
 		},
 		"internal/auth/middleware.go": {
-			Functions: []store.FunctionDecl{{
+			Functions: []*store.FunctionDecl{{
 				Name:      "Middleware",
 				Signature: "func Middleware()",
 				LineStart: 5,
 				Exported:  true,
 			}},
-			Types: []store.TypeDecl{{
+			Types: []*store.TypeDecl{{
 				Name:      "Handler",
 				Kind:      "interface",
 				LineStart: 3,
 				Exported:  true,
 			}},
-			Imports: []store.Import{{
+			Imports: []*store.Import{{
 				Path:         "github.com/example/internal/auth",
 				Internal:     true,
 				ResolvedPath: "internal/auth/jwt.go",
 			}},
 		},
 		"pkg/crypto/hash.go": {
-			Types: []store.TypeDecl{{
+			Types: []*store.TypeDecl{{
 				Name:      "Hasher",
 				Kind:      "interface",
 				LineStart: 5,
 				Exported:  true,
 			}},
-			Imports: []store.Import{{
+			Imports: []*store.Import{{
 				Path:     "crypto/sha256",
 				Internal: false,
 			}},

@@ -14,20 +14,20 @@ func sampleFileIndex() FileIndex {
 		"internal/auth/jwt.go": {
 			Language:    "go",
 			ContentHash: "sha256:abc",
-			Functions: []FunctionDecl{{
+			Functions: []*FunctionDecl{{
 				Name:      "GenerateToken",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
 				LineEnd:   20,
 				Exported:  true,
 			}},
-			Types: []TypeDecl{{
+			Types: []*TypeDecl{{
 				Name:      "Claims",
 				Kind:      "struct",
 				LineStart: 1,
 				Exported:  true,
 			}},
-			Imports: []Import{{Path: "internal/models", Internal: true}},
+			Imports: []*Import{{Path: "internal/models", Internal: true}},
 		},
 	}
 }
