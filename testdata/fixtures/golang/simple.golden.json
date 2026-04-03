@@ -10,7 +10,15 @@
       "exported": true,
       "function_type": 0,
       "src": "func Exported(name string) string {\n\treturn fmt.Sprint(name)\n}\n\n",
-      "path": "simple.go"
+      "path": "simple.go",
+      "calls": [
+        {
+          "name": "Sprint",
+          "receiver": "fmt",
+          "line": 8,
+          "ownership": 1
+        }
+      ]
     },
     {
       "name": "hidden",

@@ -209,6 +209,7 @@ func TestRunPhase1WritesFileIndexAndDepGraph(t *testing.T) {
 
 	fileIndexPath := filepath.Join(artifactsDir, "file_index.json")
 	depGraphPath := filepath.Join(artifactsDir, "dep_graph.json")
+	callGraphPath := filepath.Join(artifactsDir, "call_graph.json")
 
 	fileIndexData, err := os.ReadFile(fileIndexPath)
 	if err != nil {
@@ -218,11 +219,28 @@ func TestRunPhase1WritesFileIndexAndDepGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(dep_graph.json) error = %v", err)
 	}
+	callGraphData, err := os.ReadFile(callGraphPath)
+	if err != nil {
+		t.Fatalf("ReadFile(call_graph.json) error = %v", err)
+	}
 	if len(fileIndexData) == 0 {
 		t.Fatal("file_index.json is empty")
 	}
 	if len(depGraphData) == 0 {
 		t.Fatal("dep_graph.json is empty")
+	}
+	if len(callGraphData) == 0 {
+		t.Fatal("call_graph.json is empty")
+	}
+
+	idx, err := store.ReadFileIndex(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadFileIndex() error = %v", err)
+	}
+	handleFn := findFunction(t, idx, "internal/api/handler.go", "Handle")
+	validateCall := findCall(t, handleFn, "auth", "ValidateToken")
+	if validateCall.ResolvedTarget != "internal/auth/jwt.go#ValidateToken" {
+		t.Fatalf("resolved target = %q, want %q", validateCall.ResolvedTarget, "internal/auth/jwt.go#ValidateToken")
 	}
 }
 
@@ -245,6 +263,10 @@ func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(first dep_graph.json) error = %v", err)
 	}
+	firstCallGraph, err := os.ReadFile(filepath.Join(artifactsDir, "call_graph.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(first call_graph.json) error = %v", err)
+	}
 
 	if err := RunPhase1(cfg); err != nil {
 		t.Fatalf("second RunPhase1() error = %v", err)
@@ -257,12 +279,19 @@ func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(second dep_graph.json) error = %v", err)
 	}
+	secondCallGraph, err := os.ReadFile(filepath.Join(artifactsDir, "call_graph.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(second call_graph.json) error = %v", err)
+	}
 
 	if !bytes.Equal(firstFileIndex, secondFileIndex) {
 		t.Fatal("file_index.json changed between identical Phase 1 runs")
 	}
 	if !bytes.Equal(firstDepGraph, secondDepGraph) {
 		t.Fatal("dep_graph.json changed between identical Phase 1 runs")
+	}
+	if !bytes.Equal(firstCallGraph, secondCallGraph) {
+		t.Fatal("call_graph.json changed between identical Phase 1 runs")
 	}
 }
 

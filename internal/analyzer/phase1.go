@@ -16,11 +16,15 @@ func RunPhase1(cfg *configpkg.Config) error {
 		return err
 	}
 
+	callGraph := LinkCalls(fileIndex)
 	depGraph := BuildDepGraph(fileIndex)
 	if err := store.WriteFileIndex(cfg.ArtifactsDir, fileIndex); err != nil {
 		return err
 	}
 	if err := store.WriteDepGraph(cfg.ArtifactsDir, depGraph); err != nil {
+		return err
+	}
+	if err := store.WriteCallGraph(cfg.ArtifactsDir, callGraph); err != nil {
 		return err
 	}
 

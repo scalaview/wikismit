@@ -1,0 +1,66 @@
+{
+  "language": "go",
+  "content_hash": "54481cf6f342913d027baddca0dc95dd170aad9908d411848a72cc6c71628cea",
+  "functions": [
+    {
+      "name": "example",
+      "signature": "func example()",
+      "line_start": 7,
+      "line_end": 15,
+      "exported": false,
+      "function_type": 0,
+      "src": "func example() {\n\tvar a db.Client\n\tvar b *db.Client\n\tvar c Client\n\tvar d *Client\n\te := db.Client{}\n\tf := Client{}\n\t_, _, _, _, _, _ = a, b, c, d, e, f\n}\n\n",
+      "path": "var_decls.go",
+      "var_defs": [
+        {
+          "name": "a",
+          "type": "db.Client",
+          "line": 8
+        },
+        {
+          "name": "b",
+          "type": "db.Client",
+          "line": 9
+        },
+        {
+          "name": "c",
+          "type": "Client",
+          "line": 10
+        },
+        {
+          "name": "d",
+          "type": "Client",
+          "line": 11
+        },
+        {
+          "name": "e",
+          "type": "db.Client",
+          "line": 12
+        },
+        {
+          "name": "f",
+          "type": "Client",
+          "line": 13
+        }
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "Client",
+      "kind": "struct",
+      "line_start": 5,
+      "line_end": 5,
+      "exported": true,
+      "src": "type Client struct{}\n\n",
+      "path": "var_decls.go"
+    }
+  ],
+  "imports": [
+    {
+      "path": "pkg/db",
+      "internal": false
+    }
+  ],
+  "path": "var_decls.go"
+}

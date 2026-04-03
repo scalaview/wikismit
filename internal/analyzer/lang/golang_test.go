@@ -66,7 +66,7 @@ func TestExtractSymbolsReturnsLanguageAndHashForEmptyGoFile(t *testing.T) {
 		t.Fatalf("ExtractSymbols() = %+v, want empty symbol slices", entry)
 	}
 
-	var _ store.FileEntry = entry
+	var _ *store.FileEntry = entry
 }
 
 func TestExtractSymbolsMatchesSimpleGolden(t *testing.T) {
@@ -127,7 +127,65 @@ func TestExtractSymbolsMatchesComplexGolden(t *testing.T) {
 	}
 }
 
-func marshalGolden(entry store.FileEntry) ([]byte, error) {
+func TestExtractSymbolsMatchesImportAliasGolden(t *testing.T) {
+	fixturePath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "import_alias.go")
+	goldenPath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "import_alias.golden.json")
+
+	src, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
+	}
+	parser := newGoParser()
+	got, err := parser.ExtractSymbols("import_alias.go", "import_alias.go", src)
+	if err != nil {
+		t.Fatalf("ExtractSymbols() error = %v", err)
+	}
+
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", goldenPath, err)
+	}
+
+	gotJSON, err := marshalGolden(got)
+	if err != nil {
+		t.Fatalf("marshalGolden() error = %v", err)
+	}
+
+	if diff := cmp.Diff(string(want), string(gotJSON)); diff != "" {
+		t.Fatalf("import alias golden mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestExtractSymbolsMatchesVarDeclsGolden(t *testing.T) {
+	fixturePath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "var_decls.go")
+	goldenPath := filepath.Join("..", "..", "..", "testdata", "fixtures", "golang", "var_decls.golden.json")
+
+	src, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
+	}
+	parser := newGoParser()
+	got, err := parser.ExtractSymbols("var_decls.go", "var_decls.go", src)
+	if err != nil {
+		t.Fatalf("ExtractSymbols() error = %v", err)
+	}
+
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", goldenPath, err)
+	}
+
+	gotJSON, err := marshalGolden(got)
+	if err != nil {
+		t.Fatalf("marshalGolden() error = %v", err)
+	}
+
+	if diff := cmp.Diff(string(want), string(gotJSON)); diff != "" {
+		t.Fatalf("var decls golden mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func marshalGolden(entry *store.FileEntry) ([]byte, error) {
 	data, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return nil, err

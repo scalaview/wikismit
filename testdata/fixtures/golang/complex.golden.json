@@ -11,7 +11,14 @@
       "receiver": "Widget",
       "function_type": 1,
       "src": "func (w *Widget) Run(ctx context.Context) error {\n\t_ = ctx\n\treturn nil\n}\n\n",
-      "path": "complex.go"
+      "path": "complex.go",
+      "var_defs": [
+        {
+          "name": "w",
+          "type": "Widget",
+          "line": 16
+        }
+      ]
     },
     {
       "name": "Build",
@@ -21,7 +28,15 @@
       "exported": true,
       "function_type": 0,
       "src": "func Build(name string) (string, error) {\n\treturn fmt.Sprintf(\"hello %s\", name), nil\n}\n\n",
-      "path": "complex.go"
+      "path": "complex.go",
+      "calls": [
+        {
+          "name": "Sprintf",
+          "receiver": "fmt",
+          "line": 22,
+          "ownership": 1
+        }
+      ]
     }
   ],
   "types": [
