@@ -17,8 +17,8 @@ func (p *testParser) Extensions() []string {
 	return p.extensions
 }
 
-func (p *testParser) ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error) {
-	return store.FileEntry{}, nil
+func (p *testParser) ExtractSymbols(path string, relPath string, src []byte) (*store.FileEntry, error) {
+	return &store.FileEntry{}, nil
 }
 
 func TestRegisterIndexesAllExtensions(t *testing.T) {
@@ -96,7 +96,7 @@ func TestGoParserRegistersGoExtension(t *testing.T) {
 
 	lang.SetGoParserRegister(func(parser interface {
 		Extensions() []string
-		ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error)
+		ExtractSymbols(path string, relPath string, src []byte) (*store.FileEntry, error)
 	}) {
 		Register(parser)
 	})

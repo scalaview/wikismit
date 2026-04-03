@@ -101,6 +101,9 @@ agent:
 	if _, err := os.Stat(filepath.Join(artifactsDir, "dep_graph.json")); err != nil {
 		t.Fatalf("dep_graph.json missing: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(artifactsDir, "call_graph.json")); err != nil {
+		t.Fatalf("call_graph.json missing: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(artifactsDir, "module_docs", "auth.md")); err != nil {
 		t.Fatalf("auth module doc missing: %v", err)
 	}
@@ -698,6 +701,7 @@ func TestGenerateCommandFallsBackToFullGenerateWhenPlanArtifactsAreMissing(t *te
 	for _, path := range []string{
 		filepath.Join(artifactsDir, "file_index.json"),
 		filepath.Join(artifactsDir, "dep_graph.json"),
+		filepath.Join(artifactsDir, "call_graph.json"),
 		filepath.Join(artifactsDir, "nav_plan.json"),
 		filepath.Join(artifactsDir, "shared_context.json"),
 		filepath.Join(artifactsDir, "module_docs", "auth.md"),

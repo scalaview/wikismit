@@ -100,7 +100,7 @@ func (a *Analyzer) walkRepoDir(repoPath string, rootPath string, idx store.FileI
 			return nil
 		}
 
-		idx[relPath] = &entry
+		idx[relPath] = entry
 		return nil
 	})
 }

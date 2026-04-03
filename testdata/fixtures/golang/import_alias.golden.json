@@ -1,0 +1,58 @@
+{
+  "language": "go",
+  "content_hash": "8eb4da4f29f7a1ee9617c1118a451825fb48538895236738b55b51571f4cad95",
+  "functions": [
+    {
+      "name": "example",
+      "signature": "func example()",
+      "line_start": 10,
+      "line_end": 14,
+      "exported": false,
+      "function_type": 0,
+      "src": "func example() {\n\tfmt.Println(\"ok\")\n\tauthpkg.ValidateToken(\"token\")\n\tAdd(1, 2)\n}\n\n",
+      "path": "import_alias.go",
+      "calls": [
+        {
+          "name": "Println",
+          "receiver": "fmt",
+          "line": 11,
+          "ownership": 1
+        },
+        {
+          "name": "ValidateToken",
+          "receiver": "authpkg",
+          "line": 12,
+          "ownership": 1
+        },
+        {
+          "name": "Add",
+          "line": 13,
+          "ownership": 1
+        }
+      ]
+    }
+  ],
+  "types": [],
+  "imports": [
+    {
+      "path": "fmt",
+      "internal": false
+    },
+    {
+      "path": "internal/auth",
+      "internal": false,
+      "alias": "authpkg"
+    },
+    {
+      "path": "pkg/math",
+      "internal": false,
+      "alias": "."
+    },
+    {
+      "path": "pkg/driver",
+      "internal": false,
+      "alias": "_"
+    }
+  ],
+  "path": "import_alias.go"
+}
