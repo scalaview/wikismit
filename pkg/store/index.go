@@ -45,3 +45,13 @@ func ReadSharedContext(dir string) (SharedContext, error) {
 func WriteValidationReport(dir string, report *ValidationReport) error {
 	return writeJSON(filepath.Join(dir, "validation_report.json"), report)
 }
+
+func WriteCallGraph(dir string, graph CallGraph) error {
+	return writeJSON(filepath.Join(dir, "call_graph.json"), graph)
+}
+
+func ReadCallGraph(dir string) (CallGraph, error) {
+	var graph CallGraph
+	err := readJSON(filepath.Join(dir, "call_graph.json"), &graph)
+	return graph, err
+}

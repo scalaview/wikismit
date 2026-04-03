@@ -18,10 +18,17 @@ const (
 )
 
 type CallRef struct {
-	Name      string        `json:"name"`
-	Receiver  string        `json:"receiver,omitempty"`
-	Line      int           `json:"line"`
-	Ownership OwnerShipType `json:"ownership"`
+	Name           string        `json:"name"`
+	Receiver       string        `json:"receiver,omitempty"`
+	Line           int           `json:"line"`
+	Ownership      OwnerShipType `json:"ownership"`
+	ResolvedTarget string        `json:"resolved_target,omitempty"`
+}
+
+type VarDecl struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Line int    `json:"line"`
 }
 
 type FileEntry struct {
@@ -44,6 +51,8 @@ type FunctionDecl struct {
 	Src          string       `json:"src"`
 	Path         string       `json:"path"`
 	Summary      string       `json:"summary,omitempty"`
+	Calls        []*CallRef   `json:"calls,omitempty"`
+	VarDefs      []*VarDecl   `json:"var_defs,omitempty"`
 }
 
 type TypeDecl struct {
@@ -60,6 +69,7 @@ type Import struct {
 	Path         string `json:"path"`
 	Internal     bool   `json:"internal"`
 	ResolvedPath string `json:"-"`
+	Alias        string `json:"alias,omitempty"`
 }
 
 type DepGraph map[string][]string
@@ -106,3 +116,5 @@ type KeyFunction struct {
 }
 
 type SharedContext map[string]*SharedSummary
+
+type CallGraph map[string][]string
