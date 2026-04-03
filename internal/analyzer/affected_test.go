@@ -11,11 +11,11 @@ import (
 )
 
 func TestOwningModulesReturnsDirectOwnersForChangedFiles(t *testing.T) {
-	changed := []gitdiff.FileChange{
+	changed := []*gitdiff.FileChange{
 		{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified},
 		{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified},
 	}
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
@@ -29,11 +29,11 @@ func TestOwningModulesReturnsDirectOwnersForChangedFiles(t *testing.T) {
 }
 
 func TestOwningModulesIgnoresUnknownFiles(t *testing.T) {
-	changed := []gitdiff.FileChange{
+	changed := []*gitdiff.FileChange{
 		{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified},
 		{Path: "missing/file.go", Type: gitdiff.ChangeModified},
 	}
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}},
 	}}
 
@@ -67,7 +67,7 @@ func TestBuildReverseGraphReversesFileEdges(t *testing.T) {
 }
 
 func TestComputeAffectedReturnsLeafOwnerOnlyForIsolatedChange(t *testing.T) {
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
@@ -76,10 +76,10 @@ func TestComputeAffectedReturnsLeafOwnerOnlyForIsolatedChange(t *testing.T) {
 		"internal/auth/middleware.go": {"pkg/logger/logger.go"},
 		"pkg/logger/logger.go":        {},
 	}
-	changed := []gitdiff.FileChange{{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified}}
+	changed := []*gitdiff.FileChange{{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified}}
 
 	got := ComputeAffected(changed, plan, graph)
-	want := []store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}}}
+	want := []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}}}
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("ComputeAffected() mismatch (-want +got):\n%s", diff)
@@ -95,14 +95,14 @@ func TestComputeAffectedPropagatesSharedModuleChangesToDependents(t *testing.T) 
 	}
 
 	graph := BuildDepGraph(idx)
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"errors", "logger"}},
 		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"errors"}},
 		{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
-	changed := []gitdiff.FileChange{{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified}}
+	changed := []*gitdiff.FileChange{{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified}}
 
 	got := moduleIDs(ComputeAffected(changed, plan, graph))
 	want := []string{"api", "auth", "db", "logger"}
@@ -121,14 +121,14 @@ func TestComputeAffectedHandlesErrorsModuleDependenciesFromSampleRepo(t *testing
 	}
 
 	graph := BuildDepGraph(idx)
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Files: []string{"internal/auth/jwt.go", "internal/auth/middleware.go"}, Owner: "agent", DependsOnShared: []string{"errors", "logger"}},
 		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
 		{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"errors"}},
 		{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
-	changed := []gitdiff.FileChange{{Path: "pkg/errors/errors.go", Type: gitdiff.ChangeModified}}
+	changed := []*gitdiff.FileChange{{Path: "pkg/errors/errors.go", Type: gitdiff.ChangeModified}}
 
 	got := moduleIDs(ComputeAffected(changed, plan, graph))
 	want := []string{"api", "auth", "db", "errors"}
@@ -138,7 +138,7 @@ func TestComputeAffectedHandlesErrorsModuleDependenciesFromSampleRepo(t *testing
 	}
 }
 
-func moduleIDs(modules []store.Module) []string {
+func moduleIDs(modules []*store.Module) []string {
 	ids := make([]string, 0, len(modules))
 	for _, module := range modules {
 		ids = append(ids, module.ID)

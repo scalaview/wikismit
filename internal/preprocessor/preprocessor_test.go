@@ -64,8 +64,8 @@ func TestBuildSharedPromptInjectsAlreadySummarisedDependencies(t *testing.T) {
 }
 
 func TestGroundSharedSummaryRefsUsesFileIndexLineNumbers(t *testing.T) {
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "func New() Logger",
 			Ref:       "some/other/place.go#L999",
@@ -83,8 +83,8 @@ func TestGroundSharedSummaryRefsUsesFileIndexLineNumbers(t *testing.T) {
 }
 
 func TestGroundSharedSummaryRefsKeepsUnknownRefAndWarns(t *testing.T) {
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "Missing",
 			Signature: "func Missing()",
 			Ref:       "pkg/logger/logger.go#L999",
@@ -120,8 +120,8 @@ func TestGroundSharedSummaryRefsMatchesBySignatureWhenNamesCollide(t *testing.T)
 			}},
 		},
 	}
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "func New(cfg Config) Zeta",
 			Ref:       "wrong.go#L1",
@@ -154,8 +154,8 @@ func TestGroundSharedSummaryRefsSortsModuleFilesForDeterministicFallback(t *test
 			}},
 		},
 	}
-	summary := store.SharedSummary{
-		KeyFunctions: []store.KeyFunction{{
+	summary := &store.SharedSummary{
+		KeyFunctions: []*store.KeyFunction{{
 			Name:      "New",
 			Signature: "",
 			Ref:       "wrong.go#L1",
@@ -206,7 +206,7 @@ func samplePreprocessorIndex() store.FileIndex {
 
 func samplePreprocessorPlan() *store.NavPlan {
 	return &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 		},
@@ -215,7 +215,7 @@ func samplePreprocessorPlan() *store.NavPlan {
 
 func sampleNoSharedPlan() *store.NavPlan {
 	return &store.NavPlan{
-		Modules: []store.Module{{
+		Modules: []*store.Module{{
 			ID:     "auth",
 			Files:  []string{"internal/auth/jwt.go"},
 			Shared: false,
@@ -292,7 +292,7 @@ func TestRunPreprocessorInjectsOnlyDirectDependencies(t *testing.T) {
 		},
 	}
 	plan := &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},
@@ -361,7 +361,7 @@ func TestRunPreprocessorProcessesCyclesUsingAvailableExternalDependencies(t *tes
 		},
 	}
 	plan := &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "config", Files: []string{"pkg/config/config.go"}, Shared: true, Owner: "shared_preprocessor"},

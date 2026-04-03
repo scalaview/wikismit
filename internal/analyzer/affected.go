@@ -7,7 +7,7 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func owningModules(changedFiles []gitdiff.FileChange, plan *store.NavPlan) []string {
+func owningModules(changedFiles []*gitdiff.FileChange, plan *store.NavPlan) []string {
 	if plan == nil || len(changedFiles) == 0 {
 		return []string{}
 	}
@@ -53,12 +53,12 @@ func buildReverseGraph(graph store.DepGraph) store.DepGraph {
 	return reversed
 }
 
-func computeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
+func computeAffected(changedFiles []*gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []*store.Module {
 	if plan == nil || len(changedFiles) == 0 {
-		return []store.Module{}
+		return []*store.Module{}
 	}
 
-	moduleByID := make(map[string]store.Module, len(plan.Modules))
+	moduleByID := make(map[string]*store.Module, len(plan.Modules))
 	fileOwners := make(map[string]string)
 	for _, module := range plan.Modules {
 		moduleByID[module.ID] = module
@@ -101,7 +101,7 @@ func computeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, gra
 		}
 	}
 
-	modules := make([]store.Module, 0, len(affectedModuleIDs))
+	modules := make([]*store.Module, 0, len(affectedModuleIDs))
 	for moduleID := range affectedModuleIDs {
 		module, ok := moduleByID[moduleID]
 		if !ok {
@@ -117,7 +117,7 @@ func computeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, gra
 	return modules
 }
 
-func ComputeAffected(changedFiles []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
+func ComputeAffected(changedFiles []*gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []*store.Module {
 	return computeAffected(changedFiles, plan, graph)
 }
 
@@ -130,6 +130,6 @@ func NewImpactAnalyzer(plan *store.NavPlan, graph store.DepGraph) *ImpactAnalyze
 	return &ImpactAnalyzer{plan: plan, graph: graph}
 }
 
-func (a *ImpactAnalyzer) Analyze(changedFiles []gitdiff.FileChange) []store.Module {
+func (a *ImpactAnalyzer) Analyze(changedFiles []*gitdiff.FileChange) []*store.Module {
 	return computeAffected(changedFiles, a.plan, a.graph)
 }

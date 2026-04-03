@@ -11,7 +11,7 @@ import (
 
 func TestParseChangedFilesReturnsModifiedEntries(t *testing.T) {
 	got := ParseChangedFiles("internal/auth/jwt.go,pkg/logger/logger.go")
-	want := []FileChange{
+	want := []*FileChange{
 		{Path: "internal/auth/jwt.go", Type: ChangeModified},
 		{Path: "pkg/logger/logger.go", Type: ChangeModified},
 	}
@@ -23,7 +23,7 @@ func TestParseChangedFilesReturnsModifiedEntries(t *testing.T) {
 
 func TestParseChangedFilesTrimsWhitespaceAndSkipsEmptyValues(t *testing.T) {
 	got := ParseChangedFiles(" internal/auth/jwt.go , , pkg/logger/logger.go ,, ")
-	want := []FileChange{
+	want := []*FileChange{
 		{Path: "internal/auth/jwt.go", Type: ChangeModified},
 		{Path: "pkg/logger/logger.go", Type: ChangeModified},
 	}
@@ -53,7 +53,7 @@ func TestGetChangedFilesReturnsModifiedFileBetweenTwoCommits(t *testing.T) {
 		t.Fatalf("GetChangedFiles() error = %v", err)
 	}
 
-	want := []FileChange{{Path: "internal/auth/jwt.go", Type: ChangeModified}}
+	want := []*FileChange{{Path: "internal/auth/jwt.go", Type: ChangeModified}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("GetChangedFiles() mismatch (-want +got):\n%s", diff)
 	}
@@ -79,7 +79,7 @@ func TestGetChangedFilesReportsAddedDeletedAndRenamedFiles(t *testing.T) {
 		t.Fatalf("GetChangedFiles() error = %v", err)
 	}
 
-	want := []FileChange{
+	want := []*FileChange{
 		{Path: "added.go", Type: ChangeAdded},
 		{Path: "keep.go", Type: ChangeDeleted},
 		{Path: "new.go", OldPath: "old.go", Type: ChangeRenamed},
@@ -102,7 +102,7 @@ func TestGetChangedFilesDefaultsToHeadRangeWhenRefsAreEmpty(t *testing.T) {
 		t.Fatalf("GetChangedFiles() error = %v", err)
 	}
 
-	want := []FileChange{{Path: "internal/auth/jwt.go", Type: ChangeModified}}
+	want := []*FileChange{{Path: "internal/auth/jwt.go", Type: ChangeModified}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("GetChangedFiles() mismatch (-want +got):\n%s", diff)
 	}
@@ -119,7 +119,7 @@ func TestGetChangedFilesReturnsAllFilesForInitialCommit(t *testing.T) {
 		t.Fatalf("GetChangedFiles() error = %v", err)
 	}
 
-	want := []FileChange{
+	want := []*FileChange{
 		{Path: "internal/auth/jwt.go", Type: ChangeAdded},
 		{Path: "pkg/logger/logger.go", Type: ChangeAdded},
 	}

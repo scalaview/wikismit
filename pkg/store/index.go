@@ -22,14 +22,14 @@ func ReadDepGraph(dir string) (DepGraph, error) {
 	return graph, err
 }
 
-func WriteNavPlan(dir string, plan NavPlan) error {
+func WriteNavPlan(dir string, plan *NavPlan) error {
 	return writeJSON(filepath.Join(dir, "nav_plan.json"), plan)
 }
 
-func ReadNavPlan(dir string) (NavPlan, error) {
+func ReadNavPlan(dir string) (*NavPlan, error) {
 	var plan NavPlan
 	err := readJSON(filepath.Join(dir, "nav_plan.json"), &plan)
-	return plan, err
+	return &plan, err
 }
 
 func WriteSharedContext(dir string, shared SharedContext) error {
@@ -42,6 +42,6 @@ func ReadSharedContext(dir string) (SharedContext, error) {
 	return shared, err
 }
 
-func WriteValidationReport(dir string, report ValidationReport) error {
+func WriteValidationReport(dir string, report *ValidationReport) error {
 	return writeJSON(filepath.Join(dir, "validation_report.json"), report)
 }

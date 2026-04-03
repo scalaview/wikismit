@@ -64,13 +64,17 @@ func SetGoParserRegister(register func(interface {
 })) {
 	registerGoParser = register
 	if registerGoParser != nil {
-		registerGoParser(&goParser{
-			extractors: NewExtractors(),
-		})
+		registerGoParser(newGoParser())
 	}
 }
 
-func newGoParser() *sitter.Parser {
+func newGoParser() *goParser {
+	return &goParser{
+		extractors: NewExtractors(),
+	}
+}
+
+func newTreeSitterParser() *sitter.Parser {
 	parser := sitter.NewParser()
 	language := sitter.NewLanguage(treeSitterGo.Language())
 	if err := parser.SetLanguage(language); err != nil {
@@ -85,7 +89,7 @@ func (p *goParser) Extensions() []string {
 }
 
 func (p *goParser) ExtractSymbols(path string, relPath string, src []byte) (store.FileEntry, error) {
-	parser := newGoParser()
+	parser := newTreeSitterParser()
 	defer parser.Close()
 	srcSplitter := newSrcSplitter(src)
 
@@ -125,10 +129,6 @@ func (p *goParser) ExtractSymbols(path string, relPath string, src []byte) (stor
 	}
 
 	return entry, nil
-}
-
-func (p *goParser) executeExtractors() {
-
 }
 
 type srcSplitter struct {

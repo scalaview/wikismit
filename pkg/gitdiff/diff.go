@@ -28,25 +28,25 @@ type FileChange struct {
 	Type    ChangeType
 }
 
-func ParseChangedFiles(input string) []FileChange {
+func ParseChangedFiles(input string) []*FileChange {
 	if strings.TrimSpace(input) == "" {
-		return []FileChange{}
+		return []*FileChange{}
 	}
 
 	parts := strings.Split(input, ",")
-	changes := make([]FileChange, 0, len(parts))
+	changes := make([]*FileChange, 0, len(parts))
 	for _, part := range parts {
 		path := strings.TrimSpace(part)
 		if path == "" {
 			continue
 		}
-		changes = append(changes, FileChange{Path: path, Type: ChangeModified})
+		changes = append(changes, &FileChange{Path: path, Type: ChangeModified})
 	}
 
 	return changes
 }
 
-func GetChangedFiles(repoPath string, baseRef string, headRef string) ([]FileChange, error) {
+func GetChangedFiles(repoPath string, baseRef string, headRef string) ([]*FileChange, error) {
 	if strings.TrimSpace(headRef) == "" {
 		headRef = "HEAD"
 	}
@@ -74,7 +74,7 @@ func GetChangedFiles(repoPath string, baseRef string, headRef string) ([]FileCha
 		return nil, err
 	}
 
-	result := make([]FileChange, 0, len(changes))
+	result := make([]*FileChange, 0, len(changes))
 	for _, change := range changes {
 		action, err := change.Action()
 		if err != nil {
@@ -83,15 +83,15 @@ func GetChangedFiles(repoPath string, baseRef string, headRef string) ([]FileCha
 
 		switch action {
 		case merkletrie.Insert:
-			result = append(result, FileChange{Path: change.To.Name, Type: ChangeAdded})
+			result = append(result, &FileChange{Path: change.To.Name, Type: ChangeAdded})
 		case merkletrie.Delete:
-			result = append(result, FileChange{Path: change.From.Name, Type: ChangeDeleted})
+			result = append(result, &FileChange{Path: change.From.Name, Type: ChangeDeleted})
 		case merkletrie.Modify:
 			if change.From.Name != change.To.Name {
-				result = append(result, FileChange{Path: change.To.Name, OldPath: change.From.Name, Type: ChangeRenamed})
+				result = append(result, &FileChange{Path: change.To.Name, OldPath: change.From.Name, Type: ChangeRenamed})
 				continue
 			}
-			result = append(result, FileChange{Path: change.To.Name, Type: ChangeModified})
+			result = append(result, &FileChange{Path: change.To.Name, Type: ChangeModified})
 		}
 	}
 

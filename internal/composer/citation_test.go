@@ -12,7 +12,7 @@ import (
 func TestBuildSymbolMapIncludesFunctionAndTypeRefs(t *testing.T) {
 	// Create a sample FileIndex with both function and type declarations
 	idx := store.FileIndex{
-		"internal/auth/jwt.go": store.FileEntry{
+		"internal/auth/jwt.go": &store.FileEntry{
 			Functions: []*store.FunctionDecl{
 				{Name: "GenerateToken", LineStart: 24, Exported: true},
 				{Name: "validateToken", LineStart: 50, Exported: false},
@@ -22,7 +22,7 @@ func TestBuildSymbolMapIncludesFunctionAndTypeRefs(t *testing.T) {
 				{Name: "privateClaim", LineStart: 15, Exported: false},
 			},
 		},
-		"internal/db/conn.go": store.FileEntry{
+		"internal/db/conn.go": &store.FileEntry{
 			Functions: []*store.FunctionDecl{
 				{Name: "Connect", LineStart: 5, Exported: true},
 			},

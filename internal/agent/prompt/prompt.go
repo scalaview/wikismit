@@ -25,11 +25,11 @@ type ModuleUserPromptData struct {
 }
 
 var (
-	ModuleSystemPromptTmp template.Template
-	ModuleUserPromptTmp   template.Template
+	ModuleSystemPromptTmp *template.Template
+	ModuleUserPromptTmp   *template.Template
 )
 
 func init() {
-	ModuleSystemPromptTmp = *template.Must(template.New("module_system_prompt").Parse(ModuleSystemPrompt))
-	ModuleUserPromptTmp = *template.Must(template.New("module_user_prompt").Parse(ModuleUserPrompt))
+	ModuleSystemPromptTmp = template.Must(template.New("module_system_prompt").Parse(ModuleSystemPrompt))
+	ModuleUserPromptTmp = template.Must(template.New("module_user_prompt").Parse(ModuleUserPrompt))
 }

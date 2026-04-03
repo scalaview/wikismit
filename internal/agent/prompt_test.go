@@ -16,9 +16,9 @@ func sampleAgentConfig() *configpkg.Config {
 	}
 }
 
-func sampleAgentInput() AgentInput {
-	return AgentInput{
-		Module: store.Module{
+func sampleAgentInput() *AgentInput {
+	return &AgentInput{
+		Module: &store.Module{
 			ID:    "auth",
 			Files: []string{"internal/auth/jwt.go"},
 		},
@@ -87,7 +87,7 @@ func TestBuildAgentPromptInjectsDeclaredSharedDependenciesOnly(t *testing.T) {
 		"logger": {
 			Summary:  "Structured logger wrapping zerolog.",
 			KeyTypes: []string{"Logger"},
-			KeyFunctions: []store.KeyFunction{{
+			KeyFunctions: []*store.KeyFunction{{
 				Name:      "New",
 				Signature: "func New() Logger",
 				Ref:       "pkg/logger/logger.go#L18",

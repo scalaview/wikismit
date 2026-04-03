@@ -223,7 +223,7 @@ func ResolveImportPaths(repoPath string, cfg configpkg.AnalysisConfig, idx store
 	for path, entry := range idx {
 		entryCopy := entry
 		entryCopy.Imports = append([]*store.Import(nil), entry.Imports...)
-		if err := analyzer.resolveImports(repoPath, &entryCopy); err != nil {
+		if err := analyzer.resolveImports(repoPath, entryCopy); err != nil {
 			return nil, err
 		}
 		resolved[path] = entryCopy

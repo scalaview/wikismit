@@ -179,7 +179,7 @@ func TestRunIncrementalUsesChangedFilesOverrideWithoutOpeningGit(t *testing.T) {
 	if err := writeMinimalArtifacts(artifactsDir); err != nil {
 		t.Fatalf("writeMinimalArtifacts() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}); err != nil {
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{"internal/auth/jwt.go": {}}); err != nil {
@@ -195,23 +195,23 @@ func TestRunIncrementalUsesChangedFilesOverrideWithoutOpeningGit(t *testing.T) {
 	originalAgent := runAgentFor
 	originalComposer := runComposer
 	originalReanalyze := reanalyzeChangedFunc
-	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]gitdiff.FileChange, error) {
+	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]*gitdiff.FileChange, error) {
 		t.Fatal("getChangedFiles should not be called when changed-files override is provided")
 		return nil, nil
 	}
-	computeAffected = func(changed []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
-		return []store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}
+	computeAffected = func(changed []*gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []*store.Module {
+		return []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}
 	}
-	runPreprocessorFor = func(ctx context.Context, affected []store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	runPreprocessorFor = func(ctx context.Context, affected []*store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
 		return store.SharedContext{}, nil
 	}
-	runAgentFor = func(ctx context.Context, modules []store.Module, input agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	runAgentFor = func(ctx context.Context, modules []*store.Module, input *agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
 		return nil
 	}
 	runComposer = func(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph) error {
 		return nil
 	}
-	reanalyzeChangedFunc = func(changes []gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
+	reanalyzeChangedFunc = func(changes []*gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
 		return idx, nil
 	}
 	t.Cleanup(func() {
@@ -245,7 +245,7 @@ func TestReanalyzeChangedUpdatesModifiedAndAddedFiles(t *testing.T) {
 		"existing.go": {ContentHash: "old-hash"},
 	}
 
-	got, err := reanalyzeChanged([]gitdiff.FileChange{
+	got, err := reanalyzeChanged([]*gitdiff.FileChange{
 		{Path: "existing.go", Type: gitdiff.ChangeModified},
 		{Path: "new.go", Type: gitdiff.ChangeAdded},
 	}, idx, cfg)
@@ -277,7 +277,7 @@ func TestReanalyzeChangedRemovesDeletedFiles(t *testing.T) {
 		"deleted.go":  {ContentHash: "drop"},
 	}
 
-	got, err := reanalyzeChanged([]gitdiff.FileChange{{Path: "deleted.go", Type: gitdiff.ChangeDeleted}}, idx, cfg)
+	got, err := reanalyzeChanged([]*gitdiff.FileChange{{Path: "deleted.go", Type: gitdiff.ChangeDeleted}}, idx, cfg)
 	if err != nil {
 		t.Fatalf("reanalyzeChanged() error = %v", err)
 	}
@@ -303,7 +303,7 @@ func TestReanalyzeChangedHandlesRenamesByDroppingOldPathAndParsingNewPath(t *tes
 		"old.go": {ContentHash: "old-hash"},
 	}
 
-	got, err := reanalyzeChanged([]gitdiff.FileChange{{Path: "renamed.go", OldPath: "old.go", Type: gitdiff.ChangeRenamed}}, idx, cfg)
+	got, err := reanalyzeChanged([]*gitdiff.FileChange{{Path: "renamed.go", OldPath: "old.go", Type: gitdiff.ChangeRenamed}}, idx, cfg)
 	if err != nil {
 		t.Fatalf("reanalyzeChanged() error = %v", err)
 	}
@@ -317,7 +317,7 @@ func TestReanalyzeChangedHandlesRenamesByDroppingOldPathAndParsingNewPath(t *tes
 
 func TestRunPreprocessorForRerunsOnlyAffectedSharedModules(t *testing.T) {
 	artifactsDir := t.TempDir()
-	plan := &store.NavPlan{Modules: []store.Module{
+	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},
 	}}
@@ -342,7 +342,7 @@ func TestRunPreprocessorForRerunsOnlyAffectedSharedModules(t *testing.T) {
 	}
 	client := llm.NewMockClient(`{"summary":"updated logger summary","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L1"}]}`)
 
-	got, err := preprocessor.RunPreprocessorFor(context.Background(), []store.Module{{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"}}, plan, idx, graph, cfg, client)
+	got, err := preprocessor.RunPreprocessorFor(context.Background(), []*store.Module{{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"}}, plan, idx, graph, cfg, client)
 	if err != nil {
 		t.Fatalf("RunPreprocessorFor() error = %v", err)
 	}
@@ -367,7 +367,7 @@ func TestRunForProcessesOnlyAffectedAgentModules(t *testing.T) {
 	}
 
 	client := llm.NewMockClient("# Auth")
-	err := agent.RunFor(context.Background(), []store.Module{{ID: "auth", Owner: "agent"}}, agent.AgentInput{
+	err := agent.RunFor(context.Background(), []*store.Module{{ID: "auth", Owner: "agent"}}, &agent.AgentInput{
 		Config: &configpkg.Config{LLM: configpkg.LLMConfig{AgentModel: "agent", MaxTokens: 1024}},
 	}, client, artifactsDir, 1)
 	if err != nil {
@@ -393,7 +393,7 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 	if err := store.WriteFileIndex(artifactsDir, store.FileIndex{"pkg/logger/logger.go": {}}); err != nil {
 		t.Fatalf("WriteFileIndex() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, store.NavPlan{Modules: []store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}}); err != nil {
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{"pkg/logger/logger.go": {}}); err != nil {
@@ -402,7 +402,7 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 
 	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: configpkg.AgentConfig{Concurrency: 2}}
 	client := llm.NewMockClient()
-	changes := []gitdiff.FileChange{{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified}}
+	changes := []*gitdiff.FileChange{{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified}}
 	order := []string{}
 
 	originalGetter := getChangedFiles
@@ -411,17 +411,17 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 	originalAgent := runAgentFor
 	originalComposer := runComposer
 	originalReanalyze := reanalyzeChangedFunc
-	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]gitdiff.FileChange, error) {
+	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]*gitdiff.FileChange, error) {
 		return changes, nil
 	}
-	computeAffected = func(changed []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
-		return []store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}
+	computeAffected = func(changed []*gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []*store.Module {
+		return []*store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}
 	}
-	runPreprocessorFor = func(ctx context.Context, affected []store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	runPreprocessorFor = func(ctx context.Context, affected []*store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
 		order = append(order, "preprocessor")
 		return store.SharedContext{"logger": {Summary: "logger"}}, nil
 	}
-	runAgentFor = func(ctx context.Context, modules []store.Module, input agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	runAgentFor = func(ctx context.Context, modules []*store.Module, input *agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
 		order = append(order, "agent")
 		return nil
 	}
@@ -429,7 +429,7 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 		order = append(order, "composer")
 		return nil
 	}
-	reanalyzeChangedFunc = func(changes []gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
+	reanalyzeChangedFunc = func(changes []*gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
 		return idx, nil
 	}
 	t.Cleanup(func() {
@@ -454,7 +454,7 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 	artifactsDir := t.TempDir()
 	idx := store.FileIndex{"internal/auth/jwt.go": {ContentHash: "hash"}}
 	graph := store.DepGraph{"internal/auth/jwt.go": {}}
-	plan := store.NavPlan{Modules: []store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}
 	if err := store.WriteFileIndex(artifactsDir, idx); err != nil {
 		t.Fatalf("WriteFileIndex() error = %v", err)
 	}
@@ -467,7 +467,7 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 
 	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: configpkg.AgentConfig{Concurrency: 1}}
 	client := llm.NewMockClient()
-	changes := []gitdiff.FileChange{{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified}}
+	changes := []*gitdiff.FileChange{{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified}}
 
 	originalGetter := getChangedFiles
 	originalCompute := computeAffected
@@ -475,16 +475,16 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 	originalAgent := runAgentFor
 	originalComposer := runComposer
 	originalReanalyze := reanalyzeChangedFunc
-	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]gitdiff.FileChange, error) {
+	getChangedFiles = func(repoPath string, baseRef string, headRef string) ([]*gitdiff.FileChange, error) {
 		return changes, nil
 	}
-	computeAffected = func(changed []gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []store.Module {
-		return []store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}
+	computeAffected = func(changed []*gitdiff.FileChange, plan *store.NavPlan, graph store.DepGraph) []*store.Module {
+		return []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}
 	}
-	runPreprocessorFor = func(ctx context.Context, affected []store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+	runPreprocessorFor = func(ctx context.Context, affected []*store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
 		return store.SharedContext{}, nil
 	}
-	runAgentFor = func(ctx context.Context, modules []store.Module, input agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
+	runAgentFor = func(ctx context.Context, modules []*store.Module, input *agent.AgentInput, client llm.Client, artifactsDir string, concurrency int) error {
 		return nil
 	}
 	composerCalled := false
@@ -501,7 +501,7 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 		}
 		return nil
 	}
-	reanalyzeChangedFunc = func(changes []gitdiff.FileChange, current store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
+	reanalyzeChangedFunc = func(changes []*gitdiff.FileChange, current store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
 		return current, nil
 	}
 	t.Cleanup(func() {

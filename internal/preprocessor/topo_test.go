@@ -8,7 +8,7 @@ import (
 
 func sampleSharedNavPlan() *store.NavPlan {
 	return &store.NavPlan{
-		Modules: []store.Module{
+		Modules: []*store.Module{
 			{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Shared: false, Owner: "agent"},
 			{ID: "errors", Files: []string{"pkg/errors/errors.go"}, Shared: true, Owner: "shared_preprocessor"},
 			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Shared: true, Owner: "shared_preprocessor"},

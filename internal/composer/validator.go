@@ -22,8 +22,8 @@ func lineNumber(content []byte, offset int) int {
 	return line
 }
 
-func ValidateDocs(docsDir string) (store.ValidationReport, error) {
-	report := store.ValidationReport{GeneratedAt: time.Now().UTC()}
+func ValidateDocs(docsDir string) (*store.ValidationReport, error) {
+	report := &store.ValidationReport{GeneratedAt: time.Now().UTC()}
 
 	err := filepath.WalkDir(docsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -56,7 +56,7 @@ func ValidateDocs(docsDir string) (store.ValidationReport, error) {
 				continue
 			}
 
-			report.BrokenLinks = append(report.BrokenLinks, store.BrokenLink{
+			report.BrokenLinks = append(report.BrokenLinks, &store.BrokenLink{
 				SourceFile: path,
 				LinkText:   linkText,
 				LinkTarget: target,
@@ -68,7 +68,7 @@ func ValidateDocs(docsDir string) (store.ValidationReport, error) {
 	})
 
 	if err != nil {
-		return store.ValidationReport{}, err
+		return nil, err
 	}
 
 	return report, nil

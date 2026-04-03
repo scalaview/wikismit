@@ -2,7 +2,7 @@ package store
 
 import "time"
 
-type FileIndex map[string]FileEntry
+type FileIndex map[string]*FileEntry
 
 type OwnerShipType int
 type FunctionType int
@@ -75,14 +75,14 @@ type Module struct {
 
 type NavPlan struct {
 	GeneratedAt time.Time `json:"generated_at"`
-	Modules     []Module  `json:"modules"`
+	Modules     []*Module `json:"modules"`
 }
 
 type SharedSummary struct {
-	Summary      string        `json:"summary"`
-	KeyTypes     []string      `json:"key_types"`
-	KeyFunctions []KeyFunction `json:"key_functions"`
-	SourceRefs   []string      `json:"source_refs"`
+	Summary      string         `json:"summary"`
+	KeyTypes     []string       `json:"key_types"`
+	KeyFunctions []*KeyFunction `json:"key_functions"`
+	SourceRefs   []string       `json:"source_refs"`
 }
 
 type BrokenLink struct {
@@ -93,10 +93,10 @@ type BrokenLink struct {
 }
 
 type ValidationReport struct {
-	GeneratedAt time.Time    `json:"generated_at"`
-	BrokenLinks []BrokenLink `json:"broken_links"`
-	TotalLinks  int          `json:"total_links"`
-	TotalFiles  int          `json:"total_files"`
+	GeneratedAt time.Time     `json:"generated_at"`
+	BrokenLinks []*BrokenLink `json:"broken_links"`
+	TotalLinks  int           `json:"total_links"`
+	TotalFiles  int           `json:"total_files"`
 }
 
 type KeyFunction struct {
@@ -105,4 +105,4 @@ type KeyFunction struct {
 	Ref       string `json:"ref"`
 }
 
-type SharedContext map[string]SharedSummary
+type SharedContext map[string]*SharedSummary

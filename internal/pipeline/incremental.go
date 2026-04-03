@@ -57,7 +57,7 @@ func RunFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 	if err != nil {
 		return err
 	}
-	if err := store.WriteNavPlan(cfg.ArtifactsDir, *plan); err != nil {
+	if err := store.WriteNavPlan(cfg.ArtifactsDir, plan); err != nil {
 		return err
 	}
 
@@ -71,7 +71,7 @@ func RunFullGenerate(ctx context.Context, cfg *configpkg.Config, client llm.Clie
 		return err
 	}
 	if err := runLoggedFallbackPhase(logger, "agent", func() error {
-		return agent.RunFor(ctx, plan.Modules, agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency)
+		return agent.RunFor(ctx, plan.Modules, &agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency)
 	}); err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func RunIncremental(ctx context.Context, cfg *configpkg.Config, client llm.Clien
 		return err
 	}
 
-	var changes []gitdiff.FileChange
+	changes := make([]*gitdiff.FileChange, 0)
 	if opts.ChangedFiles != "" {
 		changes = gitdiff.ParseChangedFiles(opts.ChangedFiles)
 	} else {
@@ -131,20 +131,20 @@ func RunIncremental(ctx context.Context, cfg *configpkg.Config, client llm.Clien
 		return err
 	}
 
-	affected := computeAffected(changes, &plan, graph)
-	sharedCtx, err := runPreprocessorFor(ctx, affected, &plan, idx, graph, cfg, client)
+	affected := computeAffected(changes, plan, graph)
+	sharedCtx, err := runPreprocessorFor(ctx, affected, plan, idx, graph, cfg, client)
 	if err != nil {
 		return err
 	}
-	if err := runAgentFor(ctx, affected, agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency); err != nil {
+	if err := runAgentFor(ctx, affected, &agent.AgentInput{FileIndex: idx, SharedContext: sharedCtx, Config: cfg}, client, cfg.ArtifactsDir, cfg.Agent.Concurrency); err != nil {
 		return err
 	}
 
-	return runComposer(cfg, &plan, idx, graph)
+	return runComposer(cfg, plan, idx, graph)
 
 }
 
-func reanalyzeChanged(changes []gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
+func reanalyzeChanged(changes []*gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
 	next := make(store.FileIndex, len(idx))
 	for path, entry := range idx {
 		next[path] = entry

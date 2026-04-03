@@ -17,7 +17,7 @@ type AgentPromptData struct {
 	UserMsg   string
 }
 
-func BuildAgentPrompt(input AgentInput) *AgentPromptData {
+func BuildAgentPrompt(input *AgentInput) *AgentPromptData {
 	skeleton := planner.BuildSkeleton(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
 	sharedBlock := buildSharedModulesBlock(input)
 
@@ -46,7 +46,7 @@ func BuildAgentPrompt(input AgentInput) *AgentPromptData {
 	}
 }
 
-func buildSharedModulesBlock(input AgentInput) string {
+func buildSharedModulesBlock(input *AgentInput) string {
 	if len(input.Module.DependsOnShared) == 0 {
 		return ""
 	}

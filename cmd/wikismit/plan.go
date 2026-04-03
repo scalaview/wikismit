@@ -43,7 +43,7 @@ func newPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := store.WriteNavPlan(cfg.ArtifactsDir, *navPlan); err != nil {
+			if err := store.WriteNavPlan(cfg.ArtifactsDir, navPlan); err != nil {
 				return err
 			}
 

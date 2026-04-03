@@ -8,6 +8,8 @@
       "line_start": 16,
       "line_end": 19,
       "exported": true,
+      "receiver": "Widget",
+      "function_type": 1,
       "src": "func (w *Widget) Run(ctx context.Context) error {\n\t_ = ctx\n\treturn nil\n}\n\n",
       "path": "complex.go"
     },
@@ -17,6 +19,7 @@
       "line_start": 21,
       "line_end": 23,
       "exported": true,
+      "function_type": 0,
       "src": "func Build(name string) (string, error) {\n\treturn fmt.Sprintf(\"hello %s\", name), nil\n}\n\n",
       "path": "complex.go"
     }
