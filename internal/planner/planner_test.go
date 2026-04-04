@@ -21,15 +21,15 @@ func samplePlannerConfig(t *testing.T) *configpkg.Config {
 	return &configpkg.Config{
 		RepoPath:     t.TempDir(),
 		ArtifactsDir: t.TempDir(),
-		LLM: configpkg.LLMConfig{
+		LLM: &configpkg.LLMConfig{
 			PlannerModel: "planner-test-model",
 			MaxTokens:    512,
 			Temperature:  0.2,
 		},
-		Analysis: configpkg.AnalysisConfig{
+		Analysis: &configpkg.AnalysisConfig{
 			SharedModuleThreshold: 3,
 		},
-		Agent: configpkg.AgentConfig{
+		Agent: &configpkg.AgentConfig{
 			SkeletonMaxTokens: 1_000,
 		},
 	}

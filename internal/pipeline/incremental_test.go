@@ -14,11 +14,16 @@ import (
 	"github.com/scalaview/wikismit/internal/agent"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/log"
 	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/internal/preprocessor"
 	"github.com/scalaview/wikismit/pkg/gitdiff"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func TestMain(m *testing.M) {
+	log.SetDefaultLogger(log.New(true))
+}
 
 func TestRunFullGenerateVerboseLoggingIncludesFallbackPhaseBoundariesInOrder(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -42,18 +47,24 @@ func TestRunFullGenerateVerboseLoggingIncludesFallbackPhaseBoundariesInOrder(t *
 		ArtifactsDir: artifactsDir,
 		OutputDir:    outputDir,
 		Verbose:      true,
-		Analysis:     configpkg.AnalysisConfig{},
-		Agent: configpkg.AgentConfig{
+		Analysis: &configpkg.AnalysisConfig{
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{
+				ContextBudget: 10000,
+			},
+		},
+		Agent: &configpkg.AgentConfig{
 			Concurrency:       1,
 			SkeletonMaxTokens: 3000,
 		},
-		LLM: configpkg.LLMConfig{
+		LLM: &configpkg.LLMConfig{
 			PlannerModel:      "planner-test-model",
 			PreprocessorModel: "preprocessor-test-model",
 			AgentModel:        "agent-test-model",
 			MaxTokens:         1024,
 			Temperature:       0.2,
 		},
+		Cache: &configpkg.CacheConfig{},
+		Site:  &configpkg.SiteConfig{},
 	}
 	client := llm.NewMockClient(
 		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
@@ -115,12 +126,16 @@ func TestRunFullGenerateWithoutVerboseOmitsFallbackPhaseBoundaryDebugLogs(t *tes
 		ArtifactsDir: artifactsDir,
 		OutputDir:    outputDir,
 		Verbose:      false,
-		Analysis:     configpkg.AnalysisConfig{},
-		Agent: configpkg.AgentConfig{
+		Analysis: &configpkg.AnalysisConfig{
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{
+				ContextBudget: 100000,
+			},
+		},
+		Agent: &configpkg.AgentConfig{
 			Concurrency:       1,
 			SkeletonMaxTokens: 3000,
 		},
-		LLM: configpkg.LLMConfig{
+		LLM: &configpkg.LLMConfig{
 			PlannerModel:      "planner-test-model",
 			PreprocessorModel: "preprocessor-test-model",
 			AgentModel:        "agent-test-model",
@@ -239,7 +254,7 @@ func TestReanalyzeChangedUpdatesModifiedAndAddedFiles(t *testing.T) {
 	cfg := &configpkg.Config{
 		RepoPath:     repoPath,
 		ArtifactsDir: t.TempDir(),
-		Analysis:     configpkg.AnalysisConfig{},
+		Analysis:     &configpkg.AnalysisConfig{},
 	}
 	idx := store.FileIndex{
 		"existing.go": {ContentHash: "old-hash"},
@@ -297,7 +312,7 @@ func TestReanalyzeChangedHandlesRenamesByDroppingOldPathAndParsingNewPath(t *tes
 	cfg := &configpkg.Config{
 		RepoPath:     repoPath,
 		ArtifactsDir: t.TempDir(),
-		Analysis:     configpkg.AnalysisConfig{},
+		Analysis:     &configpkg.AnalysisConfig{},
 	}
 	idx := store.FileIndex{
 		"old.go": {ContentHash: "old-hash"},
@@ -337,8 +352,8 @@ func TestRunPreprocessorForRerunsOnlyAffectedSharedModules(t *testing.T) {
 
 	cfg := &configpkg.Config{
 		ArtifactsDir: artifactsDir,
-		Agent:        configpkg.AgentConfig{SkeletonMaxTokens: 3000},
-		LLM:          configpkg.LLMConfig{PlannerModel: "planner", MaxTokens: 1024},
+		Agent:        &configpkg.AgentConfig{SkeletonMaxTokens: 3000},
+		LLM:          &configpkg.LLMConfig{PlannerModel: "planner", MaxTokens: 1024},
 	}
 	client := llm.NewMockClient(`{"summary":"updated logger summary","key_types":["Logger"],"key_functions":[{"name":"New","signature":"func New() Logger","ref":"wrong.go#L1"}]}`)
 
@@ -368,7 +383,7 @@ func TestRunForProcessesOnlyAffectedAgentModules(t *testing.T) {
 
 	client := llm.NewMockClient("# Auth")
 	err := agent.RunFor(context.Background(), []*store.Module{{ID: "auth", Owner: "agent"}}, &agent.AgentInput{
-		Config: &configpkg.Config{LLM: configpkg.LLMConfig{AgentModel: "agent", MaxTokens: 1024}},
+		Config: &configpkg.Config{LLM: &configpkg.LLMConfig{AgentModel: "agent", MaxTokens: 1024}},
 	}, client, artifactsDir, 1)
 	if err != nil {
 		t.Fatalf("RunFor() error = %v", err)
@@ -400,7 +415,7 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 		t.Fatalf("WriteDepGraph() error = %v", err)
 	}
 
-	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: configpkg.AgentConfig{Concurrency: 2}}
+	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: &configpkg.AgentConfig{Concurrency: 2}}
 	client := llm.NewMockClient()
 	changes := []*gitdiff.FileChange{{Path: "pkg/logger/logger.go", Type: gitdiff.ChangeModified}}
 	order := []string{}
@@ -465,7 +480,7 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 		t.Fatalf("WriteDepGraph() error = %v", err)
 	}
 
-	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: configpkg.AgentConfig{Concurrency: 1}}
+	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: &configpkg.AgentConfig{Concurrency: 1}}
 	client := llm.NewMockClient()
 	changes := []*gitdiff.FileChange{{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified}}
 

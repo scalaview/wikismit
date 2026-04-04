@@ -9,8 +9,13 @@ import (
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func TestMain(m *testing.M) {
+	log.SetDefaultLogger(log.New(true))
+}
 
 func sampleGroundingIndex() store.FileIndex {
 	return store.FileIndex{
@@ -174,10 +179,10 @@ func samplePreprocessorConfig(t *testing.T) *configpkg.Config {
 	return &configpkg.Config{
 		RepoPath:     t.TempDir(),
 		ArtifactsDir: t.TempDir(),
-		Analysis: configpkg.AnalysisConfig{
+		Analysis: &configpkg.AnalysisConfig{
 			SharedModuleThreshold: 3,
 		},
-		Agent: configpkg.AgentConfig{
+		Agent: &configpkg.AgentConfig{
 			SkeletonMaxTokens: 3000,
 		},
 	}

@@ -8,14 +8,16 @@ import (
 	"sort"
 	"testing"
 
-	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
+func TestMain(m *testing.M) {
+	log.SetDefaultLogger(log.New(true))
+}
 func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
-	cfg := configpkg.AnalysisConfig{
-		ExcludePatterns: []string{"*_test.go", "vendor/**"},
-	}
+	cfg := generateConfigForTest(t)
+	cfg.Analysis.ExcludePatterns = []string{"*_test.go", "vendor/**"}
 
 	analyzer := NewAnalyzer(cfg)
 
@@ -25,10 +27,10 @@ func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
 	if analyzer.registry == nil {
 		t.Fatal("registry = nil, want parser registry")
 	}
-	if len(analyzer.excludePatterns) != len(cfg.ExcludePatterns) {
-		t.Fatalf("excludePatterns len = %d, want %d", len(analyzer.excludePatterns), len(cfg.ExcludePatterns))
+	if len(analyzer.excludePatterns) != len(cfg.Analysis.ExcludePatterns) {
+		t.Fatalf("excludePatterns len = %d, want %d", len(analyzer.excludePatterns), len(cfg.Analysis.ExcludePatterns))
 	}
-	for idx, pattern := range cfg.ExcludePatterns {
+	for idx, pattern := range cfg.Analysis.ExcludePatterns {
 		if analyzer.excludePatterns[idx] != pattern {
 			t.Fatalf("excludePatterns[%d] = %q, want %q", idx, analyzer.excludePatterns[idx], pattern)
 		}
@@ -36,7 +38,8 @@ func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
 }
 
 func TestAnalyzeIndexesAllGoFilesInSampleRepo(t *testing.T) {
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
 
 	idx, err := analyzer.Analyze(repoPath)
@@ -79,9 +82,9 @@ func TestAnalyzeSkipsFilesMatchingExcludePatterns(t *testing.T) {
 		t.Fatalf("WriteFile(vendor.go) error = %v", err)
 	}
 
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{
-		ExcludePatterns: []string{"*_test.go", "vendor/**"},
-	})
+	cfg := generateConfigForTest(t)
+	cfg.Analysis.ExcludePatterns = []string{"*_test.go", "vendor/**"}
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -108,7 +111,8 @@ func TestAnalyzeSkipsUnknownExtensionsSilently(t *testing.T) {
 		t.Fatalf("WriteFile(helper.py) error = %v", err)
 	}
 
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -178,7 +182,8 @@ func TestAnalyzeWarnsAndContinuesOnParseError(t *testing.T) {
 		t.Fatalf("WriteFile(broken.go) error = %v", err)
 	}
 
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -197,11 +202,9 @@ func TestAnalyzeWarnsAndContinuesOnParseError(t *testing.T) {
 
 func TestRunPhase1WritesFileIndexAndDepGraph(t *testing.T) {
 	artifactsDir := t.TempDir()
-	cfg := &configpkg.Config{
-		RepoPath:     filepath.Join("..", "..", "testdata", "sample_repo"),
-		ArtifactsDir: artifactsDir,
-		Analysis:     configpkg.AnalysisConfig{},
-	}
+	cfg := generateConfigForTest(t)
+	cfg.RepoPath = filepath.Join("..", "..", "testdata", "sample_repo")
+	cfg.ArtifactsDir = artifactsDir
 
 	if err := RunPhase1(cfg); err != nil {
 		t.Fatalf("RunPhase1() error = %v", err)
@@ -246,11 +249,9 @@ func TestRunPhase1WritesFileIndexAndDepGraph(t *testing.T) {
 
 func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {
 	artifactsDir := t.TempDir()
-	cfg := &configpkg.Config{
-		RepoPath:     filepath.Join("..", "..", "testdata", "sample_repo"),
-		ArtifactsDir: artifactsDir,
-		Analysis:     configpkg.AnalysisConfig{},
-	}
+	cfg := generateConfigForTest(t)
+	cfg.RepoPath = filepath.Join("..", "..", "testdata", "sample_repo")
+	cfg.ArtifactsDir = artifactsDir
 
 	if err := RunPhase1(cfg); err != nil {
 		t.Fatalf("first RunPhase1() error = %v", err)
@@ -296,7 +297,8 @@ func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {
 }
 
 func TestAnalyzeIndexesAllWorkspaceSubModules(t *testing.T) {
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
 
 	idx, err := analyzer.Analyze(repoPath)
@@ -322,7 +324,8 @@ func TestAnalyzeIndexesAllWorkspaceSubModules(t *testing.T) {
 }
 
 func TestAnalyzeWorkspaceDepGraphContainsCrossModuleEdges(t *testing.T) {
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
 
 	idx, err := analyzer.Analyze(repoPath)
@@ -347,11 +350,9 @@ func TestAnalyzeWorkspaceDepGraphContainsCrossModuleEdges(t *testing.T) {
 
 func TestRunPhase1HandlesWorkspaceRepo(t *testing.T) {
 	artifactsDir := t.TempDir()
-	cfg := &configpkg.Config{
-		RepoPath:     filepath.Join("..", "..", "testdata", "workspace_repo"),
-		ArtifactsDir: artifactsDir,
-		Analysis:     configpkg.AnalysisConfig{},
-	}
+	cfg := generateConfigForTest(t)
+	cfg.RepoPath = filepath.Join("..", "..", "testdata", "workspace_repo")
+	cfg.ArtifactsDir = artifactsDir
 
 	if err := RunPhase1(cfg); err != nil {
 		t.Fatalf("RunPhase1() error = %v", err)
@@ -394,7 +395,8 @@ func TestAnalyzeWorkspaceIgnoresGoFilesOutsideWorkspaceModules(t *testing.T) {
 		t.Fatalf("WriteFile(tools/helper.go) error = %v", err)
 	}
 
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)

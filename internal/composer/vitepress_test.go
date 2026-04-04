@@ -7,8 +7,13 @@ import (
 	"testing"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func TestMain(m *testing.M) {
+	log.SetDefaultLogger(log.New(true))
+}
 
 func TestGenerateVitePressConfigBuildsModulesAndSharedSidebarGroups(t *testing.T) {
 	plan := &store.NavPlan{Modules: []*store.Module{
@@ -16,7 +21,7 @@ func TestGenerateVitePressConfigBuildsModulesAndSharedSidebarGroups(t *testing.T
 		{ID: "api", Shared: false},
 		{ID: "logger", Shared: true},
 	}}
-	cfg := &configpkg.Config{RepoPath: "/tmp/wikismit", Site: configpkg.SiteConfig{Title: "WikiSmit Docs"}}
+	cfg := &configpkg.Config{RepoPath: "/tmp/wikismit", Site: &configpkg.SiteConfig{Title: "WikiSmit Docs"}}
 
 	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, cfg)
 	if err != nil {
@@ -39,7 +44,7 @@ func TestGenerateVitePressConfigUsesSiteTitleOrRepoNameFallback(t *testing.T) {
 
 	withTitle, err := GenerateVitePressConfig(plan, store.DepGraph{}, &configpkg.Config{
 		RepoPath: "/tmp/wikismit",
-		Site:     configpkg.SiteConfig{Title: "Custom Title"},
+		Site:     &configpkg.SiteConfig{Title: "Custom Title"},
 	})
 	if err != nil {
 		t.Fatalf("GenerateVitePressConfig() with title error = %v", err)
@@ -62,7 +67,7 @@ func TestGenerateVitePressConfigIncludesEditLinkOnlyWhenRepoURLPresent(t *testin
 
 	withRepoURL, err := GenerateVitePressConfig(plan, store.DepGraph{}, &configpkg.Config{
 		RepoPath: "/tmp/wikismit",
-		Site:     configpkg.SiteConfig{RepoURL: "https://github.com/scalaview/wikismit"},
+		Site:     &configpkg.SiteConfig{RepoURL: "https://github.com/scalaview/wikismit"},
 	})
 	if err != nil {
 		t.Fatalf("GenerateVitePressConfig() with repo URL error = %v", err)
@@ -90,7 +95,7 @@ func TestWriteVitePressAssetsCopiesLogoWhenConfigured(t *testing.T) {
 	cfg := &configpkg.Config{
 		RepoPath:  "/tmp/wikismit",
 		OutputDir: docsDir,
-		Site: configpkg.SiteConfig{
+		Site: &configpkg.SiteConfig{
 			Logo: logoPath,
 		},
 	}
@@ -150,7 +155,7 @@ func TestGenerateVitePressConfigIncludesIgnoreDeadLinks(t *testing.T) {
 	plan := &store.NavPlan{}
 	cfg := &configpkg.Config{
 		RepoPath: "/tmp/wikismit",
-		Site:     configpkg.SiteConfig{Title: "Test Docs"},
+		Site:     &configpkg.SiteConfig{Title: "Test Docs"},
 	}
 
 	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, cfg)

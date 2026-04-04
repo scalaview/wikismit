@@ -37,11 +37,11 @@ type openAIClient struct {
 	logger       logpkg.Logger
 }
 
-func NewClient(cfg configpkg.LLMConfig) (Client, error) {
+func NewClient(cfg *configpkg.LLMConfig) (Client, error) {
 	return newClient(cfg, nil)
 }
 
-func newClient(cfg configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
+func newClient(cfg *configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {
 	clientCfg := openai.DefaultConfig(cfg.APIKey())
 	if cfg.BaseURL != "" {
 		clientCfg.BaseURL = cfg.BaseURL

@@ -30,8 +30,8 @@ func sampleRunAgentInput() *AgentInput {
 			},
 		},
 		Config: &configpkg.Config{
-			Agent: configpkg.AgentConfig{SkeletonMaxTokens: 3000},
-			LLM:   configpkg.LLMConfig{AgentModel: "agent-model", MaxTokens: 2048},
+			Agent: &configpkg.AgentConfig{SkeletonMaxTokens: 3000},
+			LLM:   &configpkg.LLMConfig{AgentModel: "agent-model", MaxTokens: 2048},
 		},
 	}
 }

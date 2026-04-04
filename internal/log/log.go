@@ -8,6 +8,9 @@ import (
 	"os"
 )
 
+var _ Logger = (*slogLogger)(nil)
+var defaultLogger Logger
+
 type Logger interface {
 	Debug(msg string, fields ...any)
 	Info(msg string, fields ...any)
@@ -31,25 +34,49 @@ func newWithWriter(verbose bool, w io.Writer) Logger {
 	}
 
 	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})
-	return slogLogger{inner: slog.New(handler)}
+	return &slogLogger{inner: slog.New(handler)}
 }
 
-func (l slogLogger) Debug(msg string, fields ...any) {
+func (l *slogLogger) Debug(msg string, fields ...any) {
 	l.inner.DebugContext(context.Background(), msg, fields...)
 }
 
-func (l slogLogger) Info(msg string, fields ...any) {
+func (l *slogLogger) Info(msg string, fields ...any) {
 	l.inner.InfoContext(context.Background(), msg, fields...)
 }
 
-func (l slogLogger) Warn(msg string, fields ...any) {
+func (l *slogLogger) Warn(msg string, fields ...any) {
 	l.inner.WarnContext(context.Background(), msg, fields...)
 }
 
-func (l slogLogger) Error(msg string, fields ...any) {
+func (l *slogLogger) Error(msg string, fields ...any) {
 	l.inner.ErrorContext(context.Background(), msg, fields...)
 }
 
-func (l slogLogger) Fault(msg string, fields ...any) {
+func (l *slogLogger) Fault(msg string, fields ...any) {
 	panic(fmt.Sprintf("%s: %v", msg, fields))
+}
+
+func SetDefaultLogger(logger Logger) {
+	defaultLogger = logger
+}
+
+func Debug(msg string, fields ...any) {
+	defaultLogger.Debug(msg, fields...)
+}
+
+func Info(msg string, fields ...any) {
+	defaultLogger.Info(msg, fields...)
+}
+
+func Warn(msg string, fields ...any) {
+	defaultLogger.Warn(msg, fields...)
+}
+
+func Error(msg string, fields ...any) {
+	defaultLogger.Error(msg, fields...)
+}
+
+func Fault(msg string, fields ...any) {
+	defaultLogger.Fault(msg, fields...)
 }

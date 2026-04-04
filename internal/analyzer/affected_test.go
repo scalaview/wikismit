@@ -10,6 +10,24 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
+func generateConfigForTest(t *testing.T) *configpkg.Config {
+	return &configpkg.Config{
+		RepoPath:     filepath.Join("..", "..", "testdata", "sample_repo"),
+		ArtifactsDir: t.TempDir(),
+		LLM: &configpkg.LLMConfig{
+			AgentModel: "gpt-5.4",
+			MaxTokens:  12000,
+		},
+		Analysis: &configpkg.AnalysisConfig{
+			ExcludePatterns: []string{},
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{
+				ContextBudget: 5000,
+				MaxRetries:    3,
+			},
+		},
+	}
+}
+
 func TestOwningModulesReturnsDirectOwnersForChangedFiles(t *testing.T) {
 	changed := []*gitdiff.FileChange{
 		{Path: "internal/auth/jwt.go", Type: gitdiff.ChangeModified},
@@ -88,7 +106,8 @@ func TestComputeAffectedReturnsLeafOwnerOnlyForIsolatedChange(t *testing.T) {
 
 func TestComputeAffectedPropagatesSharedModuleChangesToDependents(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
@@ -114,7 +133,8 @@ func TestComputeAffectedPropagatesSharedModuleChangesToDependents(t *testing.T) 
 
 func TestComputeAffectedHandlesErrorsModuleDependenciesFromSampleRepo(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)

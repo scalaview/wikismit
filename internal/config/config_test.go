@@ -88,8 +88,11 @@ agent:
 func TestValidateRejectsMissingAPIKeyEnv(t *testing.T) {
 	cfg := &Config{
 		RepoPath: t.TempDir(),
-		Analysis: AnalysisConfig{SharedModuleThreshold: 1},
-		Agent:    AgentConfig{Concurrency: 4},
+		LLM:      &LLMConfig{},
+		Analysis: &AnalysisConfig{SharedModuleThreshold: 1},
+		Agent:    &AgentConfig{Concurrency: 4},
+		Cache:    &CacheConfig{},
+		Site:     &SiteConfig{},
 	}
 
 	err := cfg.Validate()
@@ -104,9 +107,9 @@ func TestValidateRejectsMissingAPIKeyEnv(t *testing.T) {
 func TestValidateRejectsBadConcurrency(t *testing.T) {
 	cfg := &Config{
 		RepoPath: t.TempDir(),
-		LLM:      LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
-		Analysis: AnalysisConfig{SharedModuleThreshold: 1},
-		Agent:    AgentConfig{Concurrency: 0},
+		LLM:      &LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
+		Analysis: &AnalysisConfig{SharedModuleThreshold: 1},
+		Agent:    &AgentConfig{Concurrency: 0},
 	}
 
 	err := cfg.Validate()
@@ -194,9 +197,9 @@ agent:
 func TestValidateRejectsMissingRepoPath(t *testing.T) {
 	cfg := &Config{
 		RepoPath: filepath.Join(t.TempDir(), "missing"),
-		LLM:      LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
-		Analysis: AnalysisConfig{SharedModuleThreshold: 1},
-		Agent:    AgentConfig{Concurrency: 4},
+		LLM:      &LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
+		Analysis: &AnalysisConfig{SharedModuleThreshold: 1},
+		Agent:    &AgentConfig{Concurrency: 4},
 	}
 
 	err := cfg.Validate()
