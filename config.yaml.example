@@ -20,6 +20,13 @@ analysis:
     - "node_modules/**"
     - "**/*.pb.go"
   shared_module_threshold: 3
+  function_summary_agent:
+    llm_model: "glm-4.7"
+    max_tokens: 12000
+    temperature: 0.2
+    max_retries: 3
+    context_budget: 10000
+    dependency_depth: 3
 
 agent:
   concurrency: 4
@@ -33,3 +40,5 @@ site:
   title: ""
   repo_url: ""
   logo: ""
+
+language: "English"

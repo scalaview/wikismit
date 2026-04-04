@@ -20,6 +20,7 @@ type FunctionSummaryConfig struct {
 	ContextBudget   int
 	MaxRetries      int
 	DependencyDepth int
+	Language        string
 }
 
 type FunctionSummaryAgent struct {
@@ -723,8 +724,9 @@ func (a *FunctionSummaryAgent) buildPrompt(state *runContext, currentBatch *batc
 
 	var systemBuf bytes.Buffer
 	if err := promptpkg.FunctionSystemPromptTmp.Execute(&systemBuf, &promptpkg.FunctionSystemPromptData{
-		Level: a.cfg.DependencyDepth - 1,
-		Depth: a.cfg.DependencyDepth,
+		Level:    a.cfg.DependencyDepth - 1,
+		Depth:    a.cfg.DependencyDepth,
+		Language: a.cfg.Language,
 	}); err != nil {
 		return nil, fmt.Errorf("execute function system prompt: %w", err)
 	}

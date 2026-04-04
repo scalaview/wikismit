@@ -22,7 +22,7 @@ type CallRef struct {
 	Receiver       string        `json:"receiver,omitempty"`
 	Line           int           `json:"line"`
 	Ownership      OwnerShipType `json:"ownership"`
-	Path           string        `json:"path"`
+	Path           string        `json:"path,omitempty"`
 	ResolvedTarget string        `json:"resolved_target,omitempty"`
 }
 

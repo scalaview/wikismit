@@ -41,6 +41,7 @@ func NewAnalyzer(cfg *configpkg.Config) *Analyzer {
 			ContextBudget:   cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
 			MaxRetries:      cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
 			DependencyDepth: cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth,
+			Language:        cfg.Language,
 		}),
 	}
 }
