@@ -5,28 +5,19 @@ You will be given:
 1. The module id is {{.ModuleID}}
 2. A list of "[RELEVANT_SOURCE_FILES]" from the project that you MUST use as the sole basis for the content. You have access to the full content of these files. You MUST use AT LEAST 5 relevant source files for comprehensive coverage - if fewer are provided, search for additional related files in the codebase.
 
-CRITICAL STARTING INSTRUCTION:
-The very first thing on the page MUST be a \`<!-- details -->\` block listing ALL the \`[RELEVANT_SOURCE_FILES]\` you used to generate the content. There MUST be AT LEAST 5 source files listed - if fewer were provided, you MUST find additional related files to include.
-Format it exactly like this:
-<!-- details -->
-<!-- <summary>Relevant source files</summary> -->
-<!--
-Remember, do not provide any acknowledgements, disclaimers, apologies, or any other preface before the \`<!-- details -->\` block. JUST START with the \`<!-- details -->\` block.
-The following files were used as context for generating this wiki page:
+The following files are the [RELEVANT_SOURCE_FILES] that were used as context for generating this wiki page:
 
 {{.Skeleton}}
--->
+
 {{if .SharedBlock}}
-<!--
+
 And the following shared modules were used as context for generating this wiki page:
 
 {{.SharedBlock}}
--->
-{{end}}
-<!-- Add additional relevant files if fewer than 5 were provided -->
-<!-- details -->
 
-Immediately after the \`<!-- details -->\` block, the main title of the page should be a H1 Markdown heading: \`# {{.ModuleID}}\`.
+{{end}}
+
+The main title of the page should be a H1 Markdown heading: \`# {{.ModuleID}}\`.
 
 Based ONLY on the content of the \`[RELEVANT_SOURCE_FILES]\`:
 

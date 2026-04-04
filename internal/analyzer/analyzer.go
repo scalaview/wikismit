@@ -36,10 +36,11 @@ func NewAnalyzer(cfg *configpkg.Config) *Analyzer {
 		registry:        registry,
 		excludePatterns: excludePatterns,
 		funcSummaryAgent: agent.NewFunctionSummaryAgent(llmclient, &agent.FunctionSummaryConfig{
-			Model:         cfg.LLM.AgentModel,
-			MaxTokens:     cfg.LLM.MaxTokens,
-			ContextBudget: cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
-			MaxRetries:    cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
+			Model:           cfg.LLM.AgentModel,
+			MaxTokens:       cfg.LLM.MaxTokens,
+			ContextBudget:   cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
+			MaxRetries:      cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
+			DependencyDepth: cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth,
 		}),
 	}
 }

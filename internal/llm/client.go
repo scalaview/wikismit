@@ -10,6 +10,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/log"
 	logpkg "github.com/scalaview/wikismit/internal/log"
 )
 
@@ -38,7 +39,7 @@ type openAIClient struct {
 }
 
 func NewClient(cfg *configpkg.LLMConfig) (Client, error) {
-	return newClient(cfg, nil)
+	return newClient(cfg, log.GetDefaultLogger())
 }
 
 func newClient(cfg *configpkg.LLMConfig, logger logpkg.Logger) (Client, error) {

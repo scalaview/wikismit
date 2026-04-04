@@ -80,3 +80,11 @@ func Error(msg string, fields ...any) {
 func Fault(msg string, fields ...any) {
 	defaultLogger.Fault(msg, fields...)
 }
+
+func GetDefaultLogger() Logger {
+	if defaultLogger == nil {
+		defaultLogger = New(false)
+	}
+
+	return defaultLogger
+}

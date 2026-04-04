@@ -46,6 +46,11 @@ type CalledFunctionStruct struct {
 }
 
 type FunctionSystemPromptData struct {
+	Level int `json:"level"`
+	Depth int `json:"depth"`
+}
+
+type FunctionUserPromptData struct {
 	Functions []FunctionStruct `json:"functions"`
 }
 

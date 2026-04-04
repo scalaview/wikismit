@@ -18,7 +18,7 @@ type AgentPromptData struct {
 }
 
 func BuildAgentPrompt(input *AgentInput) *AgentPromptData {
-	skeleton := planner.BuildSkeleton(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
+	skeleton := planner.BuildSkeletonOnlyWithSummary(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
 	sharedBlock := buildSharedModulesBlock(input)
 
 	var sysBuf bytes.Buffer

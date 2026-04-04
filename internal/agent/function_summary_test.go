@@ -420,17 +420,28 @@ func TestFunctionSummaryBuildPromptIncludesOnlyKnownInternalCalleeSummaries(t *t
 	})
 	state.summaries[FuncSign("fmt#Println")] = "fmt#Println\nSummary: Writes output to stdout."
 
-	agent := NewFunctionSummaryAgent(llm.NewMockClient(), &FunctionSummaryConfig{
-		Model:     "test-model",
-		MaxTokens: 512,
-	})
+	cfg := &FunctionSummaryConfig{
+		Model:           "test-model",
+		MaxTokens:       512,
+		DependencyDepth: 2,
+	}
+	agent := NewFunctionSummaryAgent(llm.NewMockClient(), cfg)
 
 	req, err := agent.buildPrompt(state, &batch{keys: []*fnKey{{path: path, name: "HandleRequest"}}})
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v, want nil", err)
 	}
-	if req.SystemMsg != promptpkg.FunctionSystemPrompt {
-		t.Fatalf("buildPrompt().SystemMsg = %q, want %q", req.SystemMsg, promptpkg.FunctionSystemPrompt)
+
+	var systemBuf bytes.Buffer
+	if err := promptpkg.FunctionSystemPromptTmp.Execute(&systemBuf, &promptpkg.FunctionSystemPromptData{
+		Level: cfg.DependencyDepth - 1,
+		Depth: cfg.DependencyDepth,
+	}); err != nil {
+		t.Fatalf("execute function system prompt: %v", err)
+	}
+
+	if req.SystemMsg != systemBuf.String() {
+		t.Fatalf("buildPrompt().SystemMsg = %q, want %q", req.SystemMsg, systemBuf.String())
 	}
 
 	for _, want := range []string{
@@ -503,7 +514,7 @@ func TestFunctionSummaryBuildPromptDeduplicatesRepeatedInternalCallees(t *testin
 }
 
 func TestFunctionSummaryBuildPromptTemplateSmoke(t *testing.T) {
-	data := &promptpkg.FunctionSystemPromptData{
+	data := &promptpkg.FunctionUserPromptData{
 		Functions: []promptpkg.FunctionStruct{{
 			Path: "internal/auth/service.go",
 			Src:  "func HandleRequest() error {\n\treturn persistSession()\n}",

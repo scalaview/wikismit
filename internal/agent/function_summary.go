@@ -15,10 +15,11 @@ import (
 )
 
 type FunctionSummaryConfig struct {
-	Model         string
-	MaxTokens     int
-	ContextBudget int
-	MaxRetries    int
+	Model           string
+	MaxTokens       int
+	ContextBudget   int
+	MaxRetries      int
+	DependencyDepth int
 }
 
 type FunctionSummaryAgent struct {
@@ -711,7 +712,7 @@ func (a *FunctionSummaryAgent) buildPrompt(state *runContext, currentBatch *batc
 		cfg = &FunctionSummaryConfig{}
 	}
 
-	data := &promptpkg.FunctionSystemPromptData{
+	data := &promptpkg.FunctionUserPromptData{
 		Functions: buildFunctionPromptFunctions(state, currentBatch),
 	}
 
@@ -720,9 +721,17 @@ func (a *FunctionSummaryAgent) buildPrompt(state *runContext, currentBatch *batc
 		return nil, fmt.Errorf("execute function user prompt: %w", err)
 	}
 
+	var systemBuf bytes.Buffer
+	if err := promptpkg.FunctionSystemPromptTmp.Execute(&systemBuf, &promptpkg.FunctionSystemPromptData{
+		Level: a.cfg.DependencyDepth - 1,
+		Depth: a.cfg.DependencyDepth,
+	}); err != nil {
+		return nil, fmt.Errorf("execute function system prompt: %w", err)
+	}
+
 	return &llm.CompletionRequest{
 		Model:     cfg.Model,
-		SystemMsg: promptpkg.FunctionSystemPrompt,
+		SystemMsg: systemBuf.String(),
 		UserMsg:   userBuf.String(),
 		MaxTokens: cfg.MaxTokens,
 	}, nil

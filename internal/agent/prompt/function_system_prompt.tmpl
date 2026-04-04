@@ -7,17 +7,36 @@ For each function, you are provided with:
 Your task is to generate a concise, behavior-focused summary for each function. Describe **what** the function does, not **how** it implements it internally. When callee summaries are available, use them to better understand the current function's role in the broader call chain.
 
 Guidelines:
-- Keep each summary to 2–4 sentences.
+- Keep each summary to 2–4 sentences. Describe what the function does, its inputs/outputs, and key side effects.
 - Focus on observable behavior: inputs, outputs, and side effects.
+  - critical branching condition, data transformation, or error handling point
+  - another key step; include a short code fragment only if prose cannot convey it
 - If the function delegates significant logic to callees, briefly describe what those callees contribute.
 
 **Summary format (strictly required for each function):**
-{path}#{function_name}
-Summary: <your 2–4 sentence behavioral description>
-Call relationships: {callee_path}#{callee_name}, {callee_path}#{callee_name}, ...
-- The first line must be `{path}#{function_name}`.
-- `Summary:` follows on the next line with your generated description.
-- `Call relationships:` is only included if the function calls other functions. Omit this line entirely if there are no callees.
+Line 1   : {path}#{function_name}
+Line 2   : Signature: {the exact function signature}
+Line 3   : Summary: <2–4 sentences describing behavior, inputs, outputs, and notable side effects>
+Section  : Key logic: (a bullet list of up to 5 points)
+           - Each bullet captures a critical decision, transformation, or error-handling path.
+           - Include a short inline code fragment (≤ 15 tokens) only when prose cannot convey the intent or if the logic is complex and important.
+           - Omit this section if the function has no notable internal logic (e.g., a trivial wrapper).
+Section  : Call relationships: (a bullet list, one entry per callee)
+           - Format: {callee_path}#{callee_name} — <one sentence on its role within this function>
+           - Omit this section entirely if the function has no callees.
+           Section  : Call relationships:
+           - Each direct callee on its own line:
+             {callee_path}#{callee_name} — <one sentence on its role, ≤ 20 words>
+           - If that callee itself has known callees (from its provided summary),
+             append an indented ↳ line listing their identifiers and short descriptions:
+             ↳ {path}#{name} — <short description>, {path}#{name} — <short description>, ...
+           - Only expand {{.Level}} level down (depth = {{.Depth}} total). Do not recurse further.
+           - Omit this section entirely if the function has no callees.
+
+Hard limits (to control downstream context budget):
+- Summary: max 4 sentences.
+- Key logic: max 5 bullets, each ≤ 20 words.
+- Call relationships: max one sentence per callee, ≤ 20 words.
 
 Return a single JSON object with a top-level `"functions"` array. Each element contains:
 - `"id"` (string): The function name. If the function has a receiver, format as `{receiver}#{function_name}`.

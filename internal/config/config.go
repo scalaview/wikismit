@@ -43,8 +43,9 @@ type AnalysisConfig struct {
 }
 
 type FunctionSummaryAgentConfig struct {
-	ContextBudget int `yaml:"context_budget"`
-	MaxRetries    int `yaml:"max_retries"`
+	ContextBudget   int `yaml:"context_budget"`
+	MaxRetries      int `yaml:"max_retries"`
+	DependencyDepth int `yaml:"dependency_depth"`
 }
 
 type AgentConfig struct {
@@ -87,8 +88,9 @@ func defaultConfig() Config {
 			},
 			SharedModuleThreshold: 3,
 			FunctionSummaryAgentConfig: &FunctionSummaryAgentConfig{
-				ContextBudget: 2048,
-				MaxRetries:    3,
+				ContextBudget:   2048,
+				MaxRetries:      3,
+				DependencyDepth: 2,
 			},
 		},
 		Agent: &AgentConfig{
@@ -152,6 +154,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries == 0 {
 		cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries = defaults.Analysis.FunctionSummaryAgentConfig.MaxRetries
+	}
+	if cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth == 0 {
+		cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth = defaults.Analysis.FunctionSummaryAgentConfig.DependencyDepth
 	}
 	if cfg.Agent.Concurrency == 0 {
 		cfg.Agent.Concurrency = defaults.Agent.Concurrency
