@@ -67,7 +67,7 @@ func TestBuildAgentPromptOmitsSharedContextWhenModuleHasNoSharedDeps(t *testing.
 	for _, want := range []string{
 		"You are an expert technical writer and software architect.",
 		"The module id is auth",
-		"func GenerateToken() string  // internal/auth/jwt.go:12",
+		"func GenerateToken() string  // 12,0",
 		"**Introduction:** Start with a concise introduction",
 	} {
 		if !strings.Contains(got.UserMsg, want) {

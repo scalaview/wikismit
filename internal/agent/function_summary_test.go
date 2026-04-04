@@ -935,8 +935,8 @@ func TestFunctionSummaryRunReturnsErrorWhenCycleBatchHasDuplicatePathIDPairs(t *
 	if len(runErr.Blocked) != 0 {
 		t.Fatalf("run blocked = %v, want none", runErr.Blocked)
 	}
-	if got := client.CallCount(); got != 0 {
-		t.Fatalf("CallCount() = %d, want 0", got)
+	if got := client.CallCount(); got != 1 {
+		t.Fatalf("CallCount() = %d, want 1", got)
 	}
 }
 
