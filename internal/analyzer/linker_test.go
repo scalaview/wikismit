@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -30,7 +29,8 @@ func TestBuildImportAliasMapUsesResolvedInternalImports(t *testing.T) {
 
 func TestLinkCallsResolvesSampleRepoCallGraph(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {

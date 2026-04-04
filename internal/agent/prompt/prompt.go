@@ -24,12 +24,37 @@ type ModuleUserPromptData struct {
 	Language    string `json:"language"`
 }
 
+//go:embed function_system_prompt.tmpl
+var FunctionSystemPrompt string
+
+//go:embed function_user_prompt.tmpl
+var FunctionUserPrompt string
+
+type FunctionStruct struct {
+	Path            string                  `json:"path"`
+	Src             string                  `json:"src"`
+	CalledFunctions []*CalledFunctionStruct `json:"called_functions,omitempty"`
+}
+
+type CalledFunctionStruct struct {
+	Name    string `json:"name"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type FunctionSystemPromptData struct {
+	Functions []FunctionStruct `json:"functions"`
+}
+
 var (
-	ModuleSystemPromptTmp *template.Template
-	ModuleUserPromptTmp   *template.Template
+	ModuleSystemPromptTmp   *template.Template
+	ModuleUserPromptTmp     *template.Template
+	FunctionSystemPromptTmp *template.Template
+	FunctionUserPromptTmp   *template.Template
 )
 
 func init() {
 	ModuleSystemPromptTmp = template.Must(template.New("module_system_prompt").Parse(ModuleSystemPrompt))
 	ModuleUserPromptTmp = template.Must(template.New("module_user_prompt").Parse(ModuleUserPrompt))
+	FunctionSystemPromptTmp = template.Must(template.New("function_system_prompt").Parse(FunctionSystemPrompt))
+	FunctionUserPromptTmp = template.Must(template.New("function_user_prompt").Parse(FunctionUserPrompt))
 }

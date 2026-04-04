@@ -10,6 +10,17 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
+func generateConfigForTest(t *testing.T) *configpkg.Config {
+	return &configpkg.Config{
+		RepoPath: t.TempDir(),
+		LLM:      &configpkg.LLMConfig{},
+		Analysis: &configpkg.AnalysisConfig{SharedModuleThreshold: 1},
+		Agent:    &configpkg.AgentConfig{Concurrency: 4},
+		Cache:    &configpkg.CacheConfig{},
+		Site:     &configpkg.SiteConfig{},
+	}
+}
+
 func TestGenerateTOCInsertsContentsAfterFirstH1(t *testing.T) {
 	content := "# Auth Module\n\nIntro text.\n\n## Overview\nBody.\n\n### Usage\nMore body.\n"
 
@@ -195,7 +206,9 @@ func TestRunComposerWritesDocsIndexAndValidationReport(t *testing.T) {
 		t.Fatalf("WriteFile(auth.md) error = %v", err)
 	}
 
-	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, OutputDir: outputDir}
+	cfg := generateConfigForTest(t)
+	cfg.ArtifactsDir = artifactsDir
+	cfg.OutputDir = outputDir
 	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
 	idx := store.FileIndex{}
 	graph := store.DepGraph{"auth": nil}
@@ -226,7 +239,9 @@ func TestRunComposerCreatesModuleAndSharedDirectories(t *testing.T) {
 		t.Fatalf("WriteFile(logger.md) error = %v", err)
 	}
 
-	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, OutputDir: outputDir}
+	cfg := generateConfigForTest(t)
+	cfg.ArtifactsDir = artifactsDir
+	cfg.OutputDir = outputDir
 	plan := &store.NavPlan{Modules: []*store.Module{
 		{ID: "auth", Shared: false},
 		{ID: "logger", Shared: true},
@@ -263,7 +278,7 @@ func TestRunComposerWritesVitePressConfigAndOptionalLogo(t *testing.T) {
 		ArtifactsDir: artifactsDir,
 		OutputDir:    outputDir,
 		RepoPath:     "/tmp/wikismit",
-		Site: configpkg.SiteConfig{
+		Site: &configpkg.SiteConfig{
 			Title: "WikiSmit Docs",
 			Logo:  logoPath,
 		},

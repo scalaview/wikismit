@@ -24,7 +24,7 @@ func TestRunSchedulerCapsConcurrentAgents(t *testing.T) {
 
 	input := &AgentInput{
 		Config: &configpkg.Config{
-			Agent: configpkg.AgentConfig{Concurrency: 2},
+			Agent: &configpkg.AgentConfig{Concurrency: 2},
 		},
 	}
 

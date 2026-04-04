@@ -102,7 +102,7 @@ func RunIncremental(ctx context.Context, cfg *configpkg.Config, client llm.Clien
 		return err
 	}
 	if cfg.RepoPath != "" {
-		idx, err = analyzer.ResolveImportPaths(cfg.RepoPath, cfg.Analysis, idx)
+		idx, err = analyzer.ResolveImportPaths(cfg.RepoPath, cfg, idx)
 		if err != nil {
 			return err
 		}

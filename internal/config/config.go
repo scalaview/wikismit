@@ -10,16 +10,16 @@ import (
 )
 
 type Config struct {
-	RepoPath     string         `yaml:"repo_path"`
-	OutputDir    string         `yaml:"output_dir"`
-	ArtifactsDir string         `yaml:"artifacts_dir"`
-	Verbose      bool           `yaml:"-"`
-	LLM          LLMConfig      `yaml:"llm"`
-	Analysis     AnalysisConfig `yaml:"analysis"`
-	Agent        AgentConfig    `yaml:"agent"`
-	Cache        CacheConfig    `yaml:"cache"`
-	Site         SiteConfig     `yaml:"site"`
-	Language     string         `yaml:"language"`
+	RepoPath     string          `yaml:"repo_path"`
+	OutputDir    string          `yaml:"output_dir"`
+	ArtifactsDir string          `yaml:"artifacts_dir"`
+	Verbose      bool            `yaml:"-"`
+	LLM          *LLMConfig      `yaml:"llm"`
+	Analysis     *AnalysisConfig `yaml:"analysis"`
+	Agent        *AgentConfig    `yaml:"agent"`
+	Cache        *CacheConfig    `yaml:"cache"`
+	Site         *SiteConfig     `yaml:"site"`
+	Language     string          `yaml:"language"`
 }
 
 type LLMConfig struct {
@@ -36,9 +36,15 @@ type LLMConfig struct {
 }
 
 type AnalysisConfig struct {
-	Languages             []string `yaml:"languages"`
-	ExcludePatterns       []string `yaml:"exclude_patterns"`
-	SharedModuleThreshold int      `yaml:"shared_module_threshold"`
+	Languages                  []string                    `yaml:"languages"`
+	ExcludePatterns            []string                    `yaml:"exclude_patterns"`
+	SharedModuleThreshold      int                         `yaml:"shared_module_threshold"`
+	FunctionSummaryAgentConfig *FunctionSummaryAgentConfig `yaml:"function_summary_agent"`
+}
+
+type FunctionSummaryAgentConfig struct {
+	ContextBudget int `yaml:"context_budget"`
+	MaxRetries    int `yaml:"max_retries"`
 }
 
 type AgentConfig struct {
@@ -62,7 +68,7 @@ func defaultConfig() Config {
 		RepoPath:     ".",
 		OutputDir:    "./docs",
 		ArtifactsDir: "./artifacts",
-		LLM: LLMConfig{
+		LLM: &LLMConfig{
 			BaseURL:           "https://api.openai.com/v1",
 			PlannerModel:      "gpt-4o-mini",
 			PreprocessorModel: "gpt-4o-mini",
@@ -71,7 +77,7 @@ func defaultConfig() Config {
 			Temperature:       0.2,
 			TimeoutSeconds:    120,
 		},
-		Analysis: AnalysisConfig{
+		Analysis: &AnalysisConfig{
 			Languages: []string{"go", "python", "typescript", "rust", "java"},
 			ExcludePatterns: []string{
 				"*_test.go",
@@ -80,12 +86,16 @@ func defaultConfig() Config {
 				"**/*.pb.go",
 			},
 			SharedModuleThreshold: 3,
+			FunctionSummaryAgentConfig: &FunctionSummaryAgentConfig{
+				ContextBudget: 2048,
+				MaxRetries:    3,
+			},
 		},
-		Agent: AgentConfig{
+		Agent: &AgentConfig{
 			Concurrency:       4,
 			SkeletonMaxTokens: 3000,
 		},
-		Cache: CacheConfig{
+		Cache: &CacheConfig{
 			Enabled: true,
 			Dir:     "./artifacts/cache",
 		},
@@ -137,7 +147,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Analysis.SharedModuleThreshold == 0 {
 		cfg.Analysis.SharedModuleThreshold = defaults.Analysis.SharedModuleThreshold
 	}
-
+	if cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget == 0 {
+		cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget = defaults.Analysis.FunctionSummaryAgentConfig.ContextBudget
+	}
+	if cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries == 0 {
+		cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries = defaults.Analysis.FunctionSummaryAgentConfig.MaxRetries
+	}
 	if cfg.Agent.Concurrency == 0 {
 		cfg.Agent.Concurrency = defaults.Agent.Concurrency
 	}

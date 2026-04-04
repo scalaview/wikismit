@@ -12,8 +12,13 @@ import (
 	"github.com/scalaview/wikismit/internal/analyzer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func TestMain(m *testing.M) {
+	log.SetDefaultLogger(log.New(true))
+}
 
 func writeCLIConfig(t *testing.T, body string) string {
 	t.Helper()
@@ -196,14 +201,14 @@ func sampleGenerateConfig(repoDir, artifactsDir string) *configpkg.Config {
 		RepoPath:     repoDir,
 		OutputDir:    filepath.Join(artifactsDir, "docs"),
 		ArtifactsDir: artifactsDir,
-		Analysis: configpkg.AnalysisConfig{
+		Analysis: &configpkg.AnalysisConfig{
 			SharedModuleThreshold: 3,
 		},
-		Agent: configpkg.AgentConfig{
+		Agent: &configpkg.AgentConfig{
 			Concurrency:       2,
 			SkeletonMaxTokens: 3000,
 		},
-		LLM: configpkg.LLMConfig{
+		LLM: &configpkg.LLMConfig{
 			AgentModel: "agent-test-model",
 			MaxTokens:  2048,
 		},
@@ -450,7 +455,7 @@ agent:
 	if err := analyzer.RunPhase1(&configpkg.Config{
 		RepoPath:     repoDir,
 		ArtifactsDir: artifactsDir,
-		Analysis:     configpkg.AnalysisConfig{},
+		Analysis:     &configpkg.AnalysisConfig{},
 	}); err != nil {
 		t.Fatalf("RunPhase1() error = %v", err)
 	}

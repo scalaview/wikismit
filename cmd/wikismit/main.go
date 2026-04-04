@@ -5,6 +5,7 @@ import (
 	"os"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/spf13/cobra"
 )
 
@@ -52,6 +53,7 @@ func loadAndValidateConfig() (*configpkg.Config, error) {
 		return nil, err
 	}
 	applyCLIOverrides(cfg)
+	initLogger(cfg)
 	return cfg, nil
 }
 
@@ -77,4 +79,8 @@ func runWithConfig(action func(cmd *cobra.Command, cfg *configpkg.Config) error)
 		}
 		return action(cmd, cfg)
 	}
+}
+
+func initLogger(cfg *configpkg.Config) {
+	log.SetDefaultLogger(log.New(cfg.Verbose))
 }

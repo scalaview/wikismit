@@ -10,7 +10,7 @@ import (
 
 func sampleAgentConfig() *configpkg.Config {
 	return &configpkg.Config{
-		Agent: configpkg.AgentConfig{
+		Agent: &configpkg.AgentConfig{
 			SkeletonMaxTokens: 3000,
 		},
 	}

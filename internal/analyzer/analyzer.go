@@ -1,12 +1,18 @@
 package analyzer
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/scalaview/wikismit/internal/agent"
 	configpkg "github.com/scalaview/wikismit/internal/config"
+	"github.com/scalaview/wikismit/internal/llm"
+	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -16,13 +22,25 @@ type Analyzer struct {
 	modulePath       string
 	workspaceModules map[string]string // modulePath → relative dir from workspace root
 	skippedFiles     int
+	funcSummaryAgent *agent.FunctionSummaryAgent
 }
 
-func NewAnalyzer(cfg configpkg.AnalysisConfig) *Analyzer {
-	excludePatterns := append([]string(nil), cfg.ExcludePatterns...)
+func NewAnalyzer(cfg *configpkg.Config) *Analyzer {
+	excludePatterns := append([]string(nil), cfg.Analysis.ExcludePatterns...)
+	llmclient, err := llm.NewClient(cfg.LLM)
+	if err != nil {
+		log.Fault("Init LLM client failed", err)
+	}
+
 	return &Analyzer{
 		registry:        registry,
 		excludePatterns: excludePatterns,
+		funcSummaryAgent: agent.NewFunctionSummaryAgent(llmclient, &agent.FunctionSummaryConfig{
+			Model:         cfg.LLM.AgentModel,
+			MaxTokens:     cfg.LLM.MaxTokens,
+			ContextBudget: cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
+			MaxRetries:    cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
+		}),
 	}
 }
 
@@ -118,4 +136,23 @@ func (a *Analyzer) isExcluded(relPath string) bool {
 		}
 	}
 	return false
+}
+
+func (a *Analyzer) ExecuteFunctionSummary(ctx context.Context, idx store.FileIndex) error {
+	err := a.funcSummaryAgent.Run(ctx, idx)
+	if err != nil {
+		var runErr *agent.FunctionSummaryRunError
+		if errors.As(err, &runErr) {
+			for sign, ferr := range runErr.Failed {
+				log.Error("failed: %s: %v", sign, ferr)
+			}
+			for _, sign := range runErr.Blocked {
+				log.Warn("blocked: %s", sign)
+			}
+		} else {
+			return fmt.Errorf("function summary agent failed: %w", err)
+		}
+	}
+
+	return nil
 }

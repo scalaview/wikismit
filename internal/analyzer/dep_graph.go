@@ -213,7 +213,7 @@ func (b *DepGraphBuilder) Build() store.DepGraph {
 	return buildDepGraph(b.idx)
 }
 
-func ResolveImportPaths(repoPath string, cfg configpkg.AnalysisConfig, idx store.FileIndex) (store.FileIndex, error) {
+func ResolveImportPaths(repoPath string, cfg *configpkg.Config, idx store.FileIndex) (store.FileIndex, error) {
 	analyzer := NewAnalyzer(cfg)
 	if err := analyzer.ensureModulePath(repoPath); err != nil {
 		return nil, err

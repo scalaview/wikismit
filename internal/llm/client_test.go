@@ -21,7 +21,7 @@ func TestClientCompleteReturnsResponseContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(configpkg.LLMConfig{
+	client, err := NewClient(&configpkg.LLMConfig{
 		BaseURL:        server.URL,
 		AgentModel:     "gpt-4o",
 		TimeoutSeconds: 1,
@@ -50,7 +50,7 @@ func TestClientCompleteMaps401ToNonRetryableLLMError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(configpkg.LLMConfig{
+	client, err := NewClient(&configpkg.LLMConfig{
 		BaseURL:        server.URL,
 		AgentModel:     "gpt-4o",
 		TimeoutSeconds: 1,
@@ -78,7 +78,7 @@ func TestClientCompleteMaps500ToRetryableLLMError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(configpkg.LLMConfig{
+	client, err := NewClient(&configpkg.LLMConfig{
 		BaseURL:        server.URL,
 		AgentModel:     "gpt-4o",
 		TimeoutSeconds: 1,
@@ -108,7 +108,7 @@ func TestClientCompleteMapsTimeoutToRetryableLLMError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(configpkg.LLMConfig{
+	client, err := NewClient(&configpkg.LLMConfig{
 		BaseURL:        server.URL,
 		AgentModel:     "gpt-4o",
 		TimeoutSeconds: 0,
@@ -243,7 +243,7 @@ func TestClientCompleteWithoutVerboseDoesNotEmitDebugLogs(t *testing.T) {
 func newClientWithTestLogger(t *testing.T, cfg configpkg.LLMConfig, verbose bool, buf *bytes.Buffer) *openAIClient {
 	t.Helper()
 
-	rawClient, err := newClient(cfg, newBufferLogger(verbose, buf))
+	rawClient, err := newClient(&cfg, newBufferLogger(verbose, buf))
 	if err != nil {
 		t.Fatalf("newClient() error = %v", err)
 	}
@@ -305,7 +305,7 @@ func TestClientCompleteAccumulatesMultipleContinuations(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(configpkg.LLMConfig{
+	client, err := NewClient(&configpkg.LLMConfig{
 		BaseURL:        server.URL,
 		AgentModel:     "gpt-4o",
 		TimeoutSeconds: 1,

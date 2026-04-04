@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	configpkg "github.com/scalaview/wikismit/internal/config"
-
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -25,8 +23,9 @@ func TestReadModulePathReturnsGoModModule(t *testing.T) {
 }
 
 func TestResolveInternalImportsMarksImportsAndResolvedPaths(t *testing.T) {
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -84,7 +83,8 @@ func TestResolveInternalImportsMarksImportsAndResolvedPaths(t *testing.T) {
 
 func TestBuildDepGraphIncludesEdgesForInternalImports(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -103,7 +103,8 @@ func TestBuildDepGraphIncludesEdgesForInternalImports(t *testing.T) {
 
 func TestBuildDepGraphIncludesFilesWithNoInternalImports(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -122,7 +123,8 @@ func TestBuildDepGraphIncludesFilesWithNoInternalImports(t *testing.T) {
 
 func TestBuildDepGraphOmitsThirdPartyEdges(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -159,7 +161,8 @@ func TestResolveInternalImportsHandlesModuleRootImport(t *testing.T) {
 		t.Fatalf("WriteFile(consumer.go) error = %v", err)
 	}
 
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
@@ -218,7 +221,8 @@ func TestReadWorkspaceModulesReturnsErrorWithoutGoWork(t *testing.T) {
 
 func TestEnsureModulePathDetectsWorkspace(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	if err := analyzer.ensureModulePath(repoPath); err != nil {
 		t.Fatalf("ensureModulePath() error = %v", err)
@@ -231,7 +235,8 @@ func TestEnsureModulePathDetectsWorkspace(t *testing.T) {
 
 func TestEnsureModulePathFallsBackToGoMod(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "sample_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	if err := analyzer.ensureModulePath(repoPath); err != nil {
 		t.Fatalf("ensureModulePath() error = %v", err)
@@ -247,7 +252,8 @@ func TestEnsureModulePathFallsBackToGoMod(t *testing.T) {
 
 func TestEnsureModulePathReturnsErrorWithoutGoModOrGoWork(t *testing.T) {
 	tmpDir := t.TempDir()
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	err := analyzer.ensureModulePath(tmpDir)
 	if err == nil {
@@ -270,7 +276,8 @@ func TestReadWorkspaceModulesRejectsEmptyUseDirectives(t *testing.T) {
 
 func TestResolveImportsMarksCrossModuleImportAsInternal(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	if err := analyzer.ensureModulePath(repoPath); err != nil {
 		t.Fatalf("ensureModulePath() error = %v", err)
@@ -298,7 +305,8 @@ func TestResolveImportsMarksCrossModuleImportAsInternal(t *testing.T) {
 
 func TestResolveImportsSkipsExternalImportsInWorkspace(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	if err := analyzer.ensureModulePath(repoPath); err != nil {
 		t.Fatalf("ensureModulePath() error = %v", err)
@@ -327,14 +335,15 @@ func TestResolveImportsSkipsExternalImportsInWorkspace(t *testing.T) {
 
 func TestResolveImportPathsHandlesWorkspaceFixture(t *testing.T) {
 	repoPath := filepath.Join("..", "..", "testdata", "workspace_repo")
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 
 	idx, err := analyzer.Analyze(repoPath)
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
 
-	resolved, err := ResolveImportPaths(repoPath, configpkg.AnalysisConfig{}, idx)
+	resolved, err := ResolveImportPaths(repoPath, cfg, idx)
 	if err != nil {
 		t.Fatalf("ResolveImportPaths() error = %v", err)
 	}
@@ -360,7 +369,8 @@ func TestResolveImportPathsHandlesWorkspaceFixture(t *testing.T) {
 }
 
 func TestFindModuleForImportRequiresPathBoundary(t *testing.T) {
-	analyzer := NewAnalyzer(configpkg.AnalysisConfig{})
+	cfg := generateConfigForTest(t)
+	analyzer := NewAnalyzer(cfg)
 	analyzer.workspaceModules = map[string]string{
 		"github.com/org/shared":       "shared",
 		"github.com/org/shared-utils": "shared-utils",

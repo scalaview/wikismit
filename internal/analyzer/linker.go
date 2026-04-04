@@ -394,6 +394,7 @@ func functionTarget(fn *store.FunctionDecl) string {
 
 func setResolvedCall(call *store.CallRef, fn *store.FunctionDecl) {
 	call.ResolvedTarget = functionTarget(fn)
+	call.Path = fn.Path
 	call.Ownership = store.OwnershipInternal
 }
 
