@@ -3,7 +3,7 @@ Please summarize the following functions:
 
 {{range $fn := .Functions}}
 <function_declaration>
-Path: {{$fn.Path}}
+Path: {{$fn.Path}}, Receiver: {{$fn.Receiver}}, Name: {{$fn.Name}}
 Source:
 \`\`\`
 {{$fn.Src}}
@@ -12,6 +12,8 @@ Source:
 <called_functions>
 {{range $calledFn := $fn.CalledFunctions}}{{if $calledFn.Summary}}
 <function_summary>
+Path: {{$calledFn.Path}}, Receiver: {{$calledFn.Receiver}}, Name: {{$calledFn.Name}}
+Summary:
 {{$calledFn.Summary}}
 </function_summary>
 {{end}}{{end}}

@@ -153,10 +153,21 @@ func newFunctionSummaryRunError(failed map[FuncSign]error, blocked []FuncSign) *
 	return &FunctionSummaryRunError{Failed: clonedFailed, Blocked: clonedBlocked}
 }
 
-func newFunctionSummaryBatchKey(path string, id string) functionSummaryBatchKey {
+func newFunctionSummaryBatchKey(fk *fnKey) functionSummaryBatchKey {
+	id := strings.TrimSpace(fk.name)
+	if fk.receiver != "" {
+		id = strings.TrimSpace(fk.receiver) + "#" + id
+	}
+	return functionSummaryBatchKey{
+		path: strings.TrimSpace(fk.path),
+		id:   id,
+	}
+}
+
+func newFunctionSummaryKey(path, name string) functionSummaryBatchKey {
 	return functionSummaryBatchKey{
 		path: strings.TrimSpace(path),
-		id:   strings.TrimSpace(id),
+		id:   strings.TrimSpace(name),
 	}
 }
 
@@ -411,7 +422,7 @@ func buildRequestedBatchMap(currentBatch *batch) (map[functionSummaryBatchKey]*f
 		if key == nil {
 			continue
 		}
-		requestKey := newFunctionSummaryBatchKey(key.path, key.name)
+		requestKey := newFunctionSummaryBatchKey(key)
 		owners[requestKey] = append(owners[requestKey], key)
 	}
 
@@ -778,7 +789,7 @@ func (a *FunctionSummaryAgent) reconcileBatchResults(requested map[functionSumma
 			continue
 		}
 
-		resultKey := newFunctionSummaryBatchKey(result.Path, result.ID)
+		resultKey := newFunctionSummaryKey(result.Path, result.ID)
 		requestedKey, ok := requested[resultKey]
 		if !ok {
 			if a != nil && a.logger != nil {

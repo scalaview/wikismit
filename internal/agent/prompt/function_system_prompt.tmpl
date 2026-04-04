@@ -20,7 +20,7 @@ Call relationships: {callee_path}#{callee_name}, {callee_path}#{callee_name}, ..
 - `Call relationships:` is only included if the function calls other functions. Omit this line entirely if there are no callees.
 
 Return a single JSON object with a top-level `"functions"` array. Each element contains:
-- `"id"` (string): The function name.
+- `"id"` (string): The function name. If the function has a receiver, format as `{receiver}#{function_name}`.
 - `"path"` (string): The file path where the function is defined.
 - `"summary"` (string): The self-contained summary following the format above.
 

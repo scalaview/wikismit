@@ -32,13 +32,17 @@ var FunctionUserPrompt string
 
 type FunctionStruct struct {
 	Path            string                  `json:"path"`
+	Receiver        string                  `json:"receiver,omitempty"`
+	Name            string                  `json:"name"`
 	Src             string                  `json:"src"`
 	CalledFunctions []*CalledFunctionStruct `json:"called_functions,omitempty"`
 }
 
 type CalledFunctionStruct struct {
-	Name    string `json:"name"`
-	Summary string `json:"summary,omitempty"`
+	Path     string `json:"path"`
+	Receiver string `json:"receiver,omitempty"`
+	Name     string `json:"name"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 type FunctionSystemPromptData struct {

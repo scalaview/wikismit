@@ -119,6 +119,7 @@ func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, pre
 		msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: TruncatedOutputMessage})
 	}
 
+	c.logger.Debug("sending chat completion request", "model", model, "messages", msgs)
 	resp, err := c.c.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    msgs,
