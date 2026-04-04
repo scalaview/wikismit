@@ -141,7 +141,7 @@ func BuildSkeletonOnlyWithSummary(files []string, idx store.FileIndex, maxTokens
 		}
 
 		for _, typ := range entry.Types {
-			line := fmt.Sprintf("type %s %s// %d,%d", typ.Name, typ.Kind, typ.LineStart, typ.LineEnd)
+			line := fmt.Sprintf("%s// %d,%d", typ.Src, typ.LineStart, typ.LineEnd)
 			if typ.Exported {
 				exportedLines = append(exportedLines, line)
 				continue
