@@ -37,7 +37,7 @@ func RunPhase1(cfg *configpkg.Config) error {
 	if err := store.WriteCallGraph(cfg.ArtifactsDir, callGraph); err != nil {
 		return fmt.Errorf("writing call graph: %w", err)
 	}
-	if err := analyzer.ExecuteFunctionSummary(context.Background(), fileIndex); err != nil {
+	if err := analyzer.ExecuteFunctionSummary(context.Background(), fileIndex, metrics); err != nil {
 		return fmt.Errorf("executing function summary: %w", err)
 	}
 	if err := store.WriteFileIndex(cfg.ArtifactsDir, fileIndex); err != nil {

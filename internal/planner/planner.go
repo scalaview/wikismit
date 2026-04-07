@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/scalaview/wikismit/internal/metrics"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
 	logpkg "github.com/scalaview/wikismit/internal/log"
@@ -24,7 +25,16 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 		}()
 	}
 
-	skeleton := BuildPlannerSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
+	// Load function metrics if available, use importance-annotated skeleton
+	metricsData, metricsErr := store.ReadMetrics(cfg.ArtifactsDir)
+	var skeleton string
+	if metricsErr == nil && len(metricsData) > 0 {
+		filter := metrics.NewImportanceFilter(metricsData, 0)
+		skeleton = BuildPlannerSkeletonWithImportance(idx, cfg.Agent.SkeletonMaxTokens, filter)
+	} else {
+		skeleton = BuildPlannerSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
+	}
+
 	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
 
 	parseErrors := make([]string, 0, 3)

@@ -15,6 +15,7 @@ Rules:
 - owner must be one of: "agent" or "shared_preprocessor".
 - If shared is true, owner must be "shared_preprocessor".
 - If shared is false, owner must be "agent".
+- Functions marked with ★ are high-impact. Consider making them module entry points or giving them dedicated documentation sections.
 - Respond ONLY with valid JSON. No preamble.
 
 Schema: { modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[] }] }
