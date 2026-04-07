@@ -22,6 +22,12 @@ func RunPhase1(cfg *configpkg.Config) error {
 
 	callGraph := LinkCalls(fileIndex)
 	depGraph := BuildDepGraph(fileIndex)
+
+	metrics := NewMetricsComputer().Compute(fileIndex, callGraph)
+	if err := store.WriteMetrics(cfg.ArtifactsDir, metrics); err != nil {
+		return fmt.Errorf("writing function metrics: %w", err)
+	}
+
 	if err := store.WriteFileIndex(cfg.ArtifactsDir, fileIndex); err != nil {
 		return fmt.Errorf("writing file index: %w", err)
 	}

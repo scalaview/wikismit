@@ -14,6 +14,7 @@ import (
 
 func TestMain(m *testing.M) {
 	log.SetDefaultLogger(log.New(true))
+	os.Exit(m.Run())
 }
 func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
 	cfg := generateConfigForTest(t)
