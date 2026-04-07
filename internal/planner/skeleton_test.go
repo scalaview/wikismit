@@ -345,9 +345,13 @@ func TestBuildPlannerSkeletonWithImportanceMarkers(t *testing.T) {
 	if !strings.Contains(got, "★") {
 		t.Fatalf("expected ★ marker for important functions, got:\n%s", got)
 	}
-	// Function signatures should be present (unlike standard BuildPlannerSkeleton)
+	// Important function signature should be present
 	if !strings.Contains(got, "GenerateToken") {
-		t.Fatalf("expected function name in importance skeleton, got:\n%s", got)
+		t.Fatalf("expected important function name in importance skeleton, got:\n%s", got)
+	}
+	// Non-important functions should be excluded to keep skeleton compact
+	if strings.Contains(got, "Middleware") {
+		t.Fatalf("non-important function Middleware should be excluded, got:\n%s", got)
 	}
 }
 

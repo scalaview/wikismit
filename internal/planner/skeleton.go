@@ -331,15 +331,16 @@ func BuildPlannerSkeletonWithImportance(idx store.FileIndex, maxTokens int, filt
 			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, importLine)
 		}
 
-		// Functions with importance markers (NEW - not in original BuildPlannerSkeleton)
+		// Important functions only — including ALL functions would bloat
+		// the skeleton and cause file-granular truncation, leading to
+		// "missing file assignment" errors from validateNavPlan.
 		for _, fn := range entry.Functions {
-			marker := ""
 			id := store.FuncID(fn)
-			if filter.IsImportant(id) {
-				marker = "★ "
+			if !filter.IsImportant(id) {
+				continue
 			}
 			sig := formatShortSignature(fn.Signature)
-			fnLine := fmt.Sprintf("  %s%s  // %s:%d", marker, sig, file, fn.LineStart)
+			fnLine := fmt.Sprintf("  ★ %s  // %s:%d", sig, file, fn.LineStart)
 			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fnLine)
 		}
 
