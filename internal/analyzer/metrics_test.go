@@ -7,7 +7,7 @@ import (
 )
 
 // buildTestFileIndex creates a minimal FileIndex for metrics testing.
-// Graph: Entry → A → B, Entry → C → B
+// Graph: Entry -> a -> b, Entry -> c -> b
 func buildTestFileIndex() store.FileIndex {
 	return store.FileIndex{
 		"pkg/main.go": {
@@ -113,9 +113,9 @@ func TestComputeMetricsReachableFromEntry(t *testing.T) {
 	if b == nil {
 		t.Fatal("missing metrics for b")
 	}
-	// b is reachable from Entry→a→b AND Entry→c→b = 2 paths
-	if b.ReachableFromEntry != 2 {
-		t.Fatalf("b ReachableFromEntry = %d, want 2", b.ReachableFromEntry)
+	// b is reachable from 1 entry point (Entry) via 2 paths, but counted as 1 distinct entry point
+	if b.ReachableFromEntry != 1 {
+		t.Fatalf("b ReachableFromEntry = %d, want 1", b.ReachableFromEntry)
 	}
 }
 
@@ -189,9 +189,149 @@ func TestComputeMetricsNilFunction(t *testing.T) {
 	}
 }
 
+func TestComputeMetricsSelfLoop(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/loop.go": {
+			Path: "pkg/loop.go",
+			Functions: []*store.FunctionDecl{
+				{
+					Name: "Entry", Path: "pkg/loop.go",
+					Exported: true, Src: "func Entry() { a() }",
+					Calls: []*store.CallRef{
+						{Name: "a", Path: "pkg/loop.go", Ownership: store.OwnershipInternal},
+					},
+				},
+				{
+					Name: "a", Path: "pkg/loop.go",
+					Exported: false, Src: "func a() { a() }",
+					Calls: []*store.CallRef{
+						{Name: "a", Path: "pkg/loop.go", Ownership: store.OwnershipInternal},
+					},
+				},
+			},
+		},
+	}
+	graph := store.CallGraph{
+		"pkg/loop.go#Entry": {"pkg/loop.go#a"},
+		"pkg/loop.go#a":     {"pkg/loop.go#a"},
+	}
+
+	mc := NewMetricsComputer()
+	metrics := mc.Compute(idx, graph)
+
+	a := metrics["pkg/loop.go#a"]
+	if a == nil {
+		t.Fatal("missing metrics for a")
+	}
+	if a.DepthFromEntryPoint != 1 {
+		t.Fatalf("a DepthFromEntryPoint = %d, want 1", a.DepthFromEntryPoint)
+	}
+	// self-loop does not inflate reachability
+	if a.ReachableFromEntry != 1 {
+		t.Fatalf("a ReachableFromEntry = %d, want 1", a.ReachableFromEntry)
+	}
+}
+
+func TestComputeMetricsMutualRecursion(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/cycle.go": {
+			Path: "pkg/cycle.go",
+			Functions: []*store.FunctionDecl{
+				{
+					Name: "Entry", Path: "pkg/cycle.go",
+					Exported: true, Src: "func Entry() { a() }",
+					Calls: []*store.CallRef{
+						{Name: "a", Path: "pkg/cycle.go", Ownership: store.OwnershipInternal},
+					},
+				},
+				{
+					Name: "a", Path: "pkg/cycle.go",
+					Exported: false, Src: "func a() { b() }",
+					Calls: []*store.CallRef{
+						{Name: "b", Path: "pkg/cycle.go", Ownership: store.OwnershipInternal},
+					},
+				},
+				{
+					Name: "b", Path: "pkg/cycle.go",
+					Exported: false, Src: "func b() { a() }",
+					Calls: []*store.CallRef{
+						{Name: "a", Path: "pkg/cycle.go", Ownership: store.OwnershipInternal},
+					},
+				},
+			},
+		},
+	}
+	graph := store.CallGraph{
+		"pkg/cycle.go#Entry": {"pkg/cycle.go#a"},
+		"pkg/cycle.go#a":     {"pkg/cycle.go#b"},
+		"pkg/cycle.go#b":     {"pkg/cycle.go#a"},
+	}
+
+	mc := NewMetricsComputer()
+	metrics := mc.Compute(idx, graph)
+
+	a := metrics["pkg/cycle.go#a"]
+	b := metrics["pkg/cycle.go#b"]
+	if a == nil {
+		t.Fatal("missing a")
+	}
+	if b == nil {
+		t.Fatal("missing b")
+	}
+	if a.DepthFromEntryPoint != 1 {
+		t.Fatalf("a DepthFromEntryPoint = %d, want 1", a.DepthFromEntryPoint)
+	}
+	if b.DepthFromEntryPoint != 2 {
+		t.Fatalf("b DepthFromEntryPoint = %d, want 2", b.DepthFromEntryPoint)
+	}
+	if a.ReachableFromEntry != 1 {
+		t.Fatalf("a ReachableFromEntry = %d, want 1", a.ReachableFromEntry)
+	}
+	if b.ReachableFromEntry != 1 {
+		t.Fatalf("b ReachableFromEntry = %d, want 1", b.ReachableFromEntry)
+	}
+}
+
+func TestComputeMetricsExternalCallsOnly(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/api.go": {
+			Path: "pkg/api.go",
+			Functions: []*store.FunctionDecl{
+				{
+					Name: "Handler", Path: "pkg/api.go",
+					Exported: true, Src: "func Handler() { fmt.Println() }",
+					Calls: []*store.CallRef{
+						{Name: "Println", Path: "fmt", Ownership: store.OwnershipExternal},
+					},
+				},
+			},
+		},
+	}
+	graph := store.CallGraph{}
+
+	mc := NewMetricsComputer()
+	metrics := mc.Compute(idx, graph)
+
+	h := metrics["pkg/api.go#Handler"]
+	if h == nil {
+		t.Fatal("missing Handler")
+	}
+	if h.OutDegree != 0 {
+		t.Fatalf("Handler OutDegree = %d, want 0 (only external calls)", h.OutDegree)
+	}
+}
+
+func TestComputeMetricsEmptyProject(t *testing.T) {
+	mc := NewMetricsComputer()
+	metrics := mc.Compute(store.FileIndex{}, store.CallGraph{})
+	if len(metrics) != 0 {
+		t.Fatalf("empty project should produce empty metrics, got %d entries", len(metrics))
+	}
+}
+
 func TestWeightedScoringUnreachableGetsLowScore(t *testing.T) {
 	s := DefaultWeightedScoring()
-	ctx := ScoringContext{TotalFunctions: 10, MaxReachable: 5, MaxDepth: 3}
+	ctx := ScoringContext{TotalFunctions: 10, MaxReachable: 5}
 
 	m := &store.FunctionMetrics{
 		DepthFromEntryPoint: -1,
@@ -209,7 +349,7 @@ func TestWeightedScoringUnreachableGetsLowScore(t *testing.T) {
 
 func TestWeightedScoringEntryPointGetsHighScore(t *testing.T) {
 	s := DefaultWeightedScoring()
-	ctx := ScoringContext{TotalFunctions: 10, MaxReachable: 5, MaxDepth: 3}
+	ctx := ScoringContext{TotalFunctions: 5, MaxReachable: 5}
 
 	m := &store.FunctionMetrics{
 		DepthFromEntryPoint: 0,
