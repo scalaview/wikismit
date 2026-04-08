@@ -1,12 +1,37 @@
 package agent
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/pkg/store"
 )
+
+func init() {
+	// Initialize function pointer for tests (normally set by planner's agent factory)
+	SkeletonWithSummaryBuilderFunc = func(files []string, idx store.FileIndex, maxTokens int) string {
+		// Simple test implementation that mimics planner.BuildSkeletonOnlyWithSummary format
+		var result strings.Builder
+		for _, file := range files {
+			if entry, ok := idx[file]; ok {
+				result.WriteString(fmt.Sprintf("<file: %s>\n", file))
+				for _, fn := range entry.Functions {
+					result.WriteString(fn.Signature)
+					result.WriteString(fmt.Sprintf("  // %d,%d", fn.LineStart, fn.LineEnd))
+					if fn.Summary != "" {
+						result.WriteString("\ndescription:")
+						result.WriteString(fn.Summary)
+					}
+					result.WriteString("\n")
+				}
+				result.WriteString("</file>\n")
+			}
+		}
+		return result.String()
+	}
+}
 
 func sampleAgentConfig() *configpkg.Config {
 	return &configpkg.Config{

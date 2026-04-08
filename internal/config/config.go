@@ -41,6 +41,16 @@ type AnalysisConfig struct {
 	SharedModuleThreshold      int                         `yaml:"shared_module_threshold"`
 	ImportanceThreshold        float64                     `yaml:"importance_threshold"`
 	FunctionSummaryAgentConfig *FunctionSummaryAgentConfig `yaml:"function_summary_agent"`
+	Explore                    *ExploreConfig              `yaml:"explore"`
+}
+
+// ExploreConfig controls the project structure exploration phase.
+type ExploreConfig struct {
+	Enabled       bool    `yaml:"enabled"`
+	MaxRequests   int     `yaml:"max_requests"`
+	MinFuncLines  int     `yaml:"min_func_lines"`
+	MinCalledBy   int     `yaml:"min_called_by"`
+	MinImportance float64 `yaml:"min_importance"`
 }
 
 type FunctionSummaryAgentConfig struct {
@@ -93,6 +103,13 @@ func defaultConfig() Config {
 				ContextBudget:   2048,
 				MaxRetries:      3,
 				DependencyDepth: 2,
+			},
+			Explore: &ExploreConfig{
+				Enabled:       false,
+				MaxRequests:   5,
+				MinFuncLines:  5,
+				MinCalledBy:   1,
+				MinImportance: 0.05,
 			},
 		},
 		Agent: &AgentConfig{
@@ -176,6 +193,23 @@ func applyDefaults(cfg *Config) {
 
 	if cfg.Language == "" {
 		cfg.Language = defaults.Language
+	}
+
+	if cfg.Analysis.Explore == nil {
+		cfg.Analysis.Explore = defaults.Analysis.Explore
+	} else {
+		if cfg.Analysis.Explore.MaxRequests == 0 {
+			cfg.Analysis.Explore.MaxRequests = 5
+		}
+		if cfg.Analysis.Explore.MinFuncLines == 0 {
+			cfg.Analysis.Explore.MinFuncLines = 5
+		}
+		if cfg.Analysis.Explore.MinCalledBy == 0 {
+			cfg.Analysis.Explore.MinCalledBy = 1
+		}
+		if cfg.Analysis.Explore.MinImportance == 0 {
+			cfg.Analysis.Explore.MinImportance = 0.05
+		}
 	}
 }
 

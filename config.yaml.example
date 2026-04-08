@@ -20,10 +20,13 @@ analysis:
     - "node_modules/**"
     - "**/*.pb.go"
   shared_module_threshold: 3
+  explore:
+    enabled: false
+    max_requests: 5
+    min_func_lines: 5
+    min_called_by: 1
+    min_importance: 0.05
   function_summary_agent:
-    llm_model: "glm-4.7"
-    max_tokens: 12000
-    temperature: 0.2
     max_retries: 3
     context_budget: 10000
     dependency_depth: 3

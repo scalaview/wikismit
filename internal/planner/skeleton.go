@@ -403,3 +403,11 @@ func formatShortSignature(sig string) string {
 	}
 	return sig
 }
+
+// calledByCount returns the number of callers for a function.
+func calledByCount(fn *store.FunctionDecl) int {
+	if fn == nil {
+		return 0
+	}
+	return len(fn.CalledBy)
+}
