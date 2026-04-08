@@ -53,6 +53,7 @@ type FunctionDecl struct {
 	Path         string       `json:"path"`
 	Summary      string       `json:"summary,omitempty"`
 	Calls        []*CallRef   `json:"calls,omitempty"`
+	CalledBy     []*CallRef   `json:"called_by,omitempty"`
 	VarDefs      []*VarDecl   `json:"var_defs,omitempty"`
 }
 

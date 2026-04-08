@@ -21,6 +21,7 @@ func RunPhase1(cfg *configpkg.Config) error {
 	}
 
 	callGraph := LinkCalls(fileIndex)
+	BuildCalledByIndex(fileIndex, callGraph)
 	depGraph := BuildDepGraph(fileIndex)
 
 	metrics := NewMetricsComputer().Compute(fileIndex, callGraph)
