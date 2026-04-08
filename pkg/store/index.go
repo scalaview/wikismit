@@ -55,3 +55,13 @@ func ReadCallGraph(dir string) (CallGraph, error) {
 	err := readJSON(filepath.Join(dir, "call_graph.json"), &graph)
 	return graph, err
 }
+
+func WriteMetrics(dir string, metrics MetricsMap) error {
+	return writeJSON(filepath.Join(dir, "function_metrics.json"), metrics)
+}
+
+func ReadMetrics(dir string) (MetricsMap, error) {
+	var metrics MetricsMap
+	err := readJSON(filepath.Join(dir, "function_metrics.json"), &metrics)
+	return metrics, err
+}

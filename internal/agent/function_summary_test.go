@@ -26,7 +26,7 @@ func TestFunctionSummaryAgentRunReturnsNilForEmptyIndex(t *testing.T) {
 		{name: "empty", idx: store.FileIndex{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := agent.Run(context.Background(), tc.idx); err != nil {
+			if err := agent.Run(context.Background(), tc.idx, nil); err != nil {
 				t.Fatalf("Run() error = %v, want nil", err)
 			}
 		})
@@ -54,7 +54,7 @@ func TestFunctionSummaryAgentRunReturnsNilWhenEverythingAlreadySummarized(t *tes
 		},
 	}
 
-	if err := agent.Run(context.Background(), idx); err != nil {
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 }
@@ -73,7 +73,7 @@ func TestFunctionSummaryAgentRunUsesFreshStatePerInvocation(t *testing.T) {
 				Summary: path + "#HandleRequest\nSummary: Handles the incoming request.",
 			}},
 		},
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatalf("first Run() error = %v, want nil", err)
 	}
 
@@ -86,7 +86,7 @@ func TestFunctionSummaryAgentRunUsesFreshStatePerInvocation(t *testing.T) {
 				Src:  "func HandleRequest() error {\n\treturn nil\n}",
 			}},
 		},
-	})
+	}, nil)
 	if err == nil {
 		t.Fatal("second Run() error = nil, want unusable runtime error")
 	}
@@ -631,7 +631,7 @@ func TestFunctionSummaryRunReturnsAggregateErrorAfterLayerFailure(t *testing.T) 
 	client := llm.NewMockClient("not json", functionSummaryTestResponse(&functionSummaryResult{ID: "PassLeaf", Path: path, Summary: passSummary}))
 	agent := functionSummaryTestAgent(client, 100, 0)
 
-	err := agent.Run(context.Background(), idx)
+	err := agent.Run(context.Background(), idx, nil)
 	runErr := functionSummaryTestRunError(t, err)
 
 	if got := functionSummaryTestFailureSigns(runErr); !reflect.DeepEqual(got, []FuncSign{FuncSign(path + "#FailLeaf")}) {
@@ -668,7 +668,7 @@ func TestFunctionSummaryRunDoesNotUnlockCallerAfterCalleeBatchFailure(t *testing
 	client := llm.NewMockClient("not json", functionSummaryTestResponse(&functionSummaryResult{ID: "OtherLeaf", Path: path, Summary: otherLeafSummary}))
 	agent := functionSummaryTestAgent(client, 100, 0)
 
-	err := agent.Run(context.Background(), idx)
+	err := agent.Run(context.Background(), idx, nil)
 	runErr := functionSummaryTestRunError(t, err)
 
 	if got := functionSummaryTestFailureSigns(runErr); !reflect.DeepEqual(got, []FuncSign{FuncSign(path + "#FailLeaf")}) {
@@ -704,7 +704,7 @@ func TestFunctionSummaryRunTreatsMissingBatchResultsAsFailure(t *testing.T) {
 	client := llm.NewMockClient(functionSummaryTestResponse(&functionSummaryResult{ID: "Alpha", Path: path, Summary: alphaSummary}))
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	err := agent.Run(context.Background(), idx)
+	err := agent.Run(context.Background(), idx, nil)
 	runErr := functionSummaryTestRunError(t, err)
 
 	if got := functionSummaryTestFailureSigns(runErr); !reflect.DeepEqual(got, []FuncSign{FuncSign(path + "#Beta")}) {
@@ -741,7 +741,7 @@ func TestFunctionSummaryRunProcessesLeafBeforeCaller(t *testing.T) {
 	)
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	if err := agent.Run(context.Background(), idx); err != nil {
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if got := client.CallCount(); got != 2 {
@@ -786,7 +786,7 @@ func TestFunctionSummaryRunReusesExistingSummaryWithoutReRequesting(t *testing.T
 	client := llm.NewMockClient(functionSummaryTestResponse(&functionSummaryResult{ID: "caller", Path: path, Summary: callerSummary}))
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	if err := agent.Run(context.Background(), idx); err != nil {
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if got := client.CallCount(); got != 1 {
@@ -828,7 +828,7 @@ func TestFunctionSummaryRunProcessesCycleInFinalPass(t *testing.T) {
 	))
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	if err := agent.Run(context.Background(), idx); err != nil {
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if got := client.CallCount(); got != 1 {
@@ -864,7 +864,7 @@ func TestFunctionSummaryRunReturnsErrorWhenCycleBatchIsPartial(t *testing.T) {
 	client := llm.NewMockClient(functionSummaryTestResponse(&functionSummaryResult{ID: "stepA", Path: path, Summary: stepASummary}))
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	err := agent.Run(context.Background(), idx)
+	err := agent.Run(context.Background(), idx, nil)
 	runErr := functionSummaryTestRunError(t, err)
 
 	if got := functionSummaryTestFailureSigns(runErr); !reflect.DeepEqual(got, []FuncSign{FuncSign(path + "#stepB")}) {
@@ -899,7 +899,7 @@ func TestFunctionSummaryAgentRetriesTransientLLMFailure(t *testing.T) {
 	)
 	agent := functionSummaryTestAgent(client, 1000, 1)
 
-	if err := agent.Run(context.Background(), idx); err != nil {
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
 	}
 	if got := client.CallCount(); got != 2 {
@@ -925,7 +925,7 @@ func TestFunctionSummaryRunReturnsErrorWhenCycleBatchHasDuplicatePathIDPairs(t *
 	client := llm.NewMockClient()
 	agent := functionSummaryTestAgent(client, 1000, 0)
 
-	err := agent.Run(context.Background(), idx)
+	err := agent.Run(context.Background(), idx, nil)
 	runErr := functionSummaryTestRunError(t, err)
 
 	wantFailed := []FuncSign{FuncSign(path + "#step"), FuncSign(path + "#svc#step")}

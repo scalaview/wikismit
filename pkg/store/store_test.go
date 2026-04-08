@@ -183,3 +183,64 @@ func TestReadReturnsErrArtifactNotFound(t *testing.T) {
 		t.Fatalf("error = %v, want ErrArtifactNotFound", err)
 	}
 }
+
+func TestFuncID(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   *FunctionDecl
+		want string
+	}{
+		{
+			name: "regular function",
+			fn:   &FunctionDecl{Path: "pkg/foo.go", Name: "Bar"},
+			want: "pkg/foo.go#Bar",
+		},
+		{
+			name: "method",
+			fn:   &FunctionDecl{Path: "pkg/foo.go", Name: "Bar", Receiver: "MyType"},
+			want: "pkg/foo.go#MyType#Bar",
+		},
+		{
+			name: "nil",
+			fn:   nil,
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FuncID(tt.fn); got != tt.want {
+				t.Fatalf("FuncID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWriteAndReadMetricsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := MetricsMap{
+		"pkg/foo.go#Bar": {
+			FuncID:              "pkg/foo.go#Bar",
+			OutDegree:           3,
+			DepthFromEntryPoint: 1,
+			ReachableFromEntry:  5,
+			IsExported:          true,
+			IsEntryPoint:        false,
+			LinesOfCode:         42,
+			ImportanceScore:     0.75,
+		},
+	}
+
+	if err := WriteMetrics(dir, want); err != nil {
+		t.Fatalf("WriteMetrics() error = %v", err)
+	}
+	got, err := ReadMetrics(dir)
+	if err != nil {
+		t.Fatalf("ReadMetrics() error = %v", err)
+	}
+	if got["pkg/foo.go#Bar"].FuncID != want["pkg/foo.go#Bar"].FuncID {
+		t.Fatalf("round trip mismatch: got %+v want %+v", got, want)
+	}
+	if got["pkg/foo.go#Bar"].ImportanceScore != want["pkg/foo.go#Bar"].ImportanceScore {
+		t.Fatalf("ImportanceScore = %f, want %f", got["pkg/foo.go#Bar"].ImportanceScore, want["pkg/foo.go#Bar"].ImportanceScore)
+	}
+}

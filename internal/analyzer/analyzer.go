@@ -36,12 +36,13 @@ func NewAnalyzer(cfg *configpkg.Config) *Analyzer {
 		registry:        registry,
 		excludePatterns: excludePatterns,
 		funcSummaryAgent: agent.NewFunctionSummaryAgent(llmclient, &agent.FunctionSummaryConfig{
-			Model:           cfg.LLM.AgentModel,
-			MaxTokens:       cfg.LLM.MaxTokens,
-			ContextBudget:   cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
-			MaxRetries:      cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
-			DependencyDepth: cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth,
-			Language:        cfg.Language,
+			Model:               cfg.LLM.AgentModel,
+			MaxTokens:           cfg.LLM.MaxTokens,
+			ContextBudget:       cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget,
+			MaxRetries:          cfg.Analysis.FunctionSummaryAgentConfig.MaxRetries,
+			DependencyDepth:     cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth,
+			Language:            cfg.Language,
+			ImportanceThreshold: cfg.Analysis.ImportanceThreshold,
 		}),
 	}
 }
@@ -140,8 +141,8 @@ func (a *Analyzer) isExcluded(relPath string) bool {
 	return false
 }
 
-func (a *Analyzer) ExecuteFunctionSummary(ctx context.Context, idx store.FileIndex) error {
-	err := a.funcSummaryAgent.Run(ctx, idx)
+func (a *Analyzer) ExecuteFunctionSummary(ctx context.Context, idx store.FileIndex, metrics store.MetricsMap) error {
+	err := a.funcSummaryAgent.Run(ctx, idx, metrics)
 	if err != nil {
 		var runErr *agent.FunctionSummaryRunError
 		if errors.As(err, &runErr) {

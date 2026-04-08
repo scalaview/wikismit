@@ -39,6 +39,7 @@ type AnalysisConfig struct {
 	Languages                  []string                    `yaml:"languages"`
 	ExcludePatterns            []string                    `yaml:"exclude_patterns"`
 	SharedModuleThreshold      int                         `yaml:"shared_module_threshold"`
+	ImportanceThreshold        float64                     `yaml:"importance_threshold"`
 	FunctionSummaryAgentConfig *FunctionSummaryAgentConfig `yaml:"function_summary_agent"`
 }
 
@@ -87,6 +88,7 @@ func defaultConfig() Config {
 				"**/*.pb.go",
 			},
 			SharedModuleThreshold: 3,
+			ImportanceThreshold:   0.1,
 			FunctionSummaryAgentConfig: &FunctionSummaryAgentConfig{
 				ContextBudget:   2048,
 				MaxRetries:      3,
@@ -148,6 +150,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Analysis.SharedModuleThreshold == 0 {
 		cfg.Analysis.SharedModuleThreshold = defaults.Analysis.SharedModuleThreshold
+	}
+	if cfg.Analysis.ImportanceThreshold == 0 {
+		cfg.Analysis.ImportanceThreshold = defaults.Analysis.ImportanceThreshold
 	}
 	if cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget == 0 {
 		cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget = defaults.Analysis.FunctionSummaryAgentConfig.ContextBudget
@@ -222,6 +227,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Analysis.SharedModuleThreshold < 1 {
 		errs = append(errs, fmt.Errorf("Analysis.SharedModuleThreshold must be >= 1, got %d", c.Analysis.SharedModuleThreshold))
+	}
+	if c.Analysis.ImportanceThreshold < 0 || c.Analysis.ImportanceThreshold > 1 {
+		errs = append(errs, fmt.Errorf("Analysis.ImportanceThreshold must be between 0 and 1, got %.2f", c.Analysis.ImportanceThreshold))
 	}
 
 	if len(errs) == 0 {
