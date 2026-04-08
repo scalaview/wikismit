@@ -53,6 +53,7 @@ type FunctionDecl struct {
 	Path         string       `json:"path"`
 	Summary      string       `json:"summary,omitempty"`
 	Calls        []*CallRef   `json:"calls,omitempty"`
+	CalledBy     []*CallRef   `json:"called_by,omitempty"`
 	VarDefs      []*VarDecl   `json:"var_defs,omitempty"`
 }
 
@@ -119,3 +120,26 @@ type KeyFunction struct {
 type SharedContext map[string]*SharedSummary
 
 type CallGraph map[string][]string
+
+type FunctionMetrics struct {
+	FuncID              string  `json:"func_id"`
+	OutDegree           int     `json:"out_degree"`
+	DepthFromEntryPoint int     `json:"depth_from_entry_point"`
+	ReachableFromEntry  int     `json:"reachable_from_entry"`
+	IsExported          bool    `json:"is_exported"`
+	IsEntryPoint        bool    `json:"is_entry_point"`
+	LinesOfCode         int     `json:"lines_of_code"`
+	ImportanceScore     float64 `json:"importance_score"`
+}
+
+type MetricsMap map[string]*FunctionMetrics
+
+func FuncID(fn *FunctionDecl) string {
+	if fn == nil {
+		return ""
+	}
+	if fn.Receiver == "" {
+		return fn.Path + "#" + fn.Name
+	}
+	return fn.Path + "#" + fn.Receiver + "#" + fn.Name
+}

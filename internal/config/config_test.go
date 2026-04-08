@@ -210,3 +210,73 @@ func TestValidateRejectsMissingRepoPath(t *testing.T) {
 		t.Fatalf("Validate() error = %v, want RepoPath violation", err)
 	}
 }
+
+func TestValidateRejectsBadImportanceThreshold(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		value float64
+	}{
+		{"negative", -0.1},
+		{"above one", 1.5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				RepoPath: t.TempDir(),
+				LLM:      &LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
+				Analysis: &AnalysisConfig{SharedModuleThreshold: 1, ImportanceThreshold: tt.value},
+				Agent:    &AgentConfig{Concurrency: 4},
+			}
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatal("Validate() error = nil, want validation error")
+			}
+			if !strings.Contains(err.Error(), "ImportanceThreshold") {
+				t.Fatalf("Validate() error = %v, want ImportanceThreshold violation", err)
+			}
+		})
+	}
+}
+
+func TestLoadConfigAppliesDefaultImportanceThreshold(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+agent:
+  concurrency: 4
+`)
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Analysis.ImportanceThreshold != 0.1 {
+		t.Fatalf("ImportanceThreshold = %.2f, want 0.10", cfg.Analysis.ImportanceThreshold)
+	}
+}
+
+func TestLoadConfigReadsExplicitImportanceThreshold(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  importance_threshold: 0.5
+agent:
+  concurrency: 4
+`)
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Analysis.ImportanceThreshold != 0.5 {
+		t.Fatalf("ImportanceThreshold = %.2f, want 0.50", cfg.Analysis.ImportanceThreshold)
+	}
+}

@@ -15,12 +15,13 @@ import (
 )
 
 type FunctionSummaryConfig struct {
-	Model           string
-	MaxTokens       int
-	ContextBudget   int
-	MaxRetries      int
-	DependencyDepth int
-	Language        string
+	Model               string
+	MaxTokens           int
+	ContextBudget       int
+	MaxRetries          int
+	DependencyDepth     int
+	Language            string
+	ImportanceThreshold float64
 }
 
 type FunctionSummaryAgent struct {
@@ -1006,9 +1007,20 @@ func (a *FunctionSummaryAgent) processLayer(ctx context.Context, rc *runContext,
 	return nil
 }
 
-func (a *FunctionSummaryAgent) Run(ctx context.Context, idx store.FileIndex) error {
+func (a *FunctionSummaryAgent) Run(ctx context.Context, idx store.FileIndex, metrics store.MetricsMap) error {
 	if len(idx) == 0 {
 		return nil
+	}
+
+	// Filter functions below importance threshold if metrics are available
+	if len(metrics) > 0 && a.cfg != nil && a.cfg.ImportanceThreshold > 0 {
+		filtered := filterFileIndexByImportance(idx, metrics, a.cfg.ImportanceThreshold)
+		total := countFunctions(idx)
+		kept := countFunctions(filtered)
+		if skipped := total - kept; skipped > 0 {
+			a.logger.Debug("filtered functions by importance", "total", total, "kept", kept, "skipped", skipped)
+		}
+		idx = filtered
 	}
 
 	state := newRunContext(idx)
@@ -1053,4 +1065,48 @@ func (a *FunctionSummaryAgent) Run(ctx context.Context, idx store.FileIndex) err
 	}
 
 	return nil
+}
+
+// filterFileIndexByImportance creates a filtered copy of the FileIndex containing only
+// functions that meet the importance threshold. FunctionDecl pointers are intentionally
+// shared (not copied) with the original index so that summary mutations (fn.Summary = ...)
+// propagate back to the caller's index.
+func filterFileIndexByImportance(idx store.FileIndex, metrics store.MetricsMap, threshold float64) store.FileIndex {
+	filtered := make(store.FileIndex, len(idx))
+	for path, entry := range idx {
+		if entry == nil {
+			continue
+		}
+		newEntry := &store.FileEntry{
+			Language:    entry.Language,
+			ContentHash: entry.ContentHash,
+			Functions:   make([]*store.FunctionDecl, 0, len(entry.Functions)),
+			Types:       entry.Types,
+			Imports:     entry.Imports,
+			Path:        entry.Path,
+		}
+		for _, fn := range entry.Functions {
+			if fn == nil {
+				continue
+			}
+			id := store.FuncID(fn)
+			// Include if no metrics (conservative) or score meets threshold
+			if m, ok := metrics[id]; !ok || m.ImportanceScore >= threshold {
+				newEntry.Functions = append(newEntry.Functions, fn)
+			}
+		}
+		filtered[path] = newEntry
+	}
+	return filtered
+}
+
+func countFunctions(idx store.FileIndex) int {
+	count := 0
+	for _, entry := range idx {
+		if entry == nil {
+			continue
+		}
+		count += len(entry.Functions)
+	}
+	return count
 }

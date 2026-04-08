@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scalaview/wikismit/internal/metrics"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
@@ -137,6 +138,7 @@ func plannerFileIndex() store.FileIndex {
 		"internal/auth/jwt.go": {
 			Functions: []*store.FunctionDecl{{
 				Name:      "GenerateToken",
+				Path:      "internal/auth/jwt.go",
 				Signature: "func GenerateToken() string",
 				LineStart: 10,
 				Exported:  true,
@@ -156,6 +158,7 @@ func plannerFileIndex() store.FileIndex {
 		"internal/auth/middleware.go": {
 			Functions: []*store.FunctionDecl{{
 				Name:      "Middleware",
+				Path:      "internal/auth/middleware.go",
 				Signature: "func Middleware()",
 				LineStart: 5,
 				Exported:  true,
@@ -311,5 +314,88 @@ func TestBuildFullSkeletonUsesSameExportedFirstTruncationRule(t *testing.T) {
 	}
 	if estimateTokens(got) > 56 {
 		t.Fatalf("estimateTokens(BuildFullSkeleton()) = %d, want <= 56\n%s", estimateTokens(got), got)
+	}
+}
+
+func TestBuildPlannerSkeletonWithImportanceNilFilter(t *testing.T) {
+	t.Parallel()
+	idx := plannerFileIndex()
+
+	got := BuildPlannerSkeletonWithImportance(idx, 10_000, nil)
+
+	// Should fallback to standard skeleton (no function names)
+	if strings.Contains(got, "func ") {
+		t.Fatalf("nil filter should use standard skeleton without functions, got:\n%s", got)
+	}
+}
+
+func TestBuildPlannerSkeletonWithImportanceMarkers(t *testing.T) {
+	idx := plannerFileIndex()
+
+	// Create testMetrics where GenerateToken is important, Middleware is not
+	testMetrics := store.MetricsMap{
+		"internal/auth/jwt.go#GenerateToken":    {FuncID: "internal/auth/jwt.go#GenerateToken", ImportanceScore: 0.95},
+		"internal/auth/middleware.go#Middleware": {FuncID: "internal/auth/middleware.go#Middleware", ImportanceScore: 0.3},
+	}
+	filter := metrics.NewImportanceFilter(testMetrics, 0)
+
+	got := BuildPlannerSkeletonWithImportance(idx, 10_000, filter)
+
+	// Important function should have ★ marker
+	if !strings.Contains(got, "★") {
+		t.Fatalf("expected ★ marker for important functions, got:\n%s", got)
+	}
+	// Function signatures should be present (unlike standard BuildPlannerSkeleton)
+	if !strings.Contains(got, "GenerateToken") {
+		t.Fatalf("expected function name in importance skeleton, got:\n%s", got)
+	}
+}
+
+func TestBuildPlannerSkeletonWithImportanceOrdersFilesByScore(t *testing.T) {
+	idx := store.FileIndex{
+		"pkg/low.go": {
+			Path: "pkg/low.go",
+			Functions: []*store.FunctionDecl{{
+				Name: "Helper", Path: "pkg/low.go", Signature: "func Helper()",
+				LineStart: 1, Exported: false,
+			}},
+		},
+		"pkg/high.go": {
+			Path: "pkg/high.go",
+			Functions: []*store.FunctionDecl{{
+				Name: "Main", Path: "pkg/high.go", Signature: "func Main()",
+				LineStart: 1, Exported: true,
+			}},
+		},
+	}
+	testMetrics := store.MetricsMap{
+		"pkg/low.go#Helper": {FuncID: "pkg/low.go#Helper", ImportanceScore: 0.1},
+		"pkg/high.go#Main":  {FuncID: "pkg/high.go#Main", ImportanceScore: 0.9},
+	}
+	filter := metrics.NewImportanceFilter(testMetrics, 0)
+
+	got := BuildPlannerSkeletonWithImportance(idx, 10_000, filter)
+
+	highIdx := strings.Index(got, "pkg/high.go")
+	lowIdx := strings.Index(got, "pkg/low.go")
+	if highIdx == -1 || lowIdx == -1 {
+		t.Fatalf("missing file headers:\n%s", got)
+	}
+	if highIdx > lowIdx {
+		t.Fatalf("high.go should appear before low.go (higher importance), got:\n%s", got)
+	}
+}
+
+func TestBuildPlannerSkeletonWithImportanceRespectsTokenBudget(t *testing.T) {
+	idx := plannerFileIndex()
+	testMetrics := store.MetricsMap{
+		"internal/auth/jwt.go#GenerateToken": {FuncID: "internal/auth/jwt.go#GenerateToken", ImportanceScore: 0.9},
+	}
+	filter := metrics.NewImportanceFilter(testMetrics, 0)
+
+	got := BuildPlannerSkeletonWithImportance(idx, 15, filter)
+
+	if estimateTokens(got) > 15 {
+		t.Fatalf("estimateTokens() = %d, want <= 15\n%s", estimateTokens(got), got)
 	}
 }

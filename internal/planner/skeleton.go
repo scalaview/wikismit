@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/scalaview/wikismit/internal/metrics"
 	logpkg "github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
@@ -276,4 +277,129 @@ func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// BuildPlannerSkeletonWithImportance builds a planner skeleton with importance markers.
+// Files with higher-importance functions appear first. Important functions (above 75th
+// percentile) are prefixed with "★ " to guide the planner's attention.
+func BuildPlannerSkeletonWithImportance(idx store.FileIndex, maxTokens int, filter *metrics.ImportanceFilter) string {
+	if filter == nil {
+		return BuildPlannerSkeleton(idx, maxTokens)
+	}
+
+	// Sort files: files with important functions come first
+	sortedFiles := sortFilesByMaxImportance(idx, filter)
+
+	var lines []string
+	chars := 0
+
+	for _, file := range sortedFiles {
+		entry, ok := idx[file]
+		if !ok {
+			continue
+		}
+
+		// Build all output lines for this file
+		var fileLines []string
+		fileChars := 0
+
+		// File path header
+		header := fmt.Sprintf("// %s", file)
+		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, header)
+
+		// Exported type names (same as original)
+		var typeNames []string
+		for _, typ := range entry.Types {
+			if typ.Exported {
+				typeNames = append(typeNames, typ.Name)
+			}
+		}
+		if len(typeNames) > 0 {
+			typeLine := fmt.Sprintf("  type %s", strings.Join(typeNames, ", "))
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, typeLine)
+		}
+
+		// Internal import relationships (same as original)
+		var importPaths []string
+		for _, imp := range entry.Imports {
+			if imp.Internal && imp.ResolvedPath != "" {
+				importPaths = append(importPaths, imp.ResolvedPath)
+			}
+		}
+		if len(importPaths) > 0 {
+			importLine := fmt.Sprintf("  -> %s", strings.Join(importPaths, ", "))
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, importLine)
+		}
+
+		// Functions with importance markers (NEW - not in original BuildPlannerSkeleton)
+		for _, fn := range entry.Functions {
+			marker := ""
+			id := store.FuncID(fn)
+			if filter.IsImportant(id) {
+				marker = "★ "
+			}
+			sig := formatShortSignature(fn.Signature)
+			fnLine := fmt.Sprintf("  %s%s  // %s:%d", marker, sig, file, fn.LineStart)
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fnLine)
+		}
+
+		// Check token budget at file granularity
+		testChars := chars
+		wouldExceed := false
+		for _, l := range fileLines {
+			if estimatedTokensAfterAppend(testChars, l) > maxTokens {
+				wouldExceed = true
+				break
+			}
+			testChars += len(l)
+			if testChars > 0 {
+				testChars++
+			}
+		}
+
+		if wouldExceed {
+			if logger != nil {
+				logger.Warn("importance skeleton truncated", "file", file)
+			}
+			break
+		}
+
+		for _, l := range fileLines {
+			lines, chars = appendLineWithCharCount(lines, chars, l)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// sortFilesByMaxImportance returns file paths sorted by their highest importance score.
+func sortFilesByMaxImportance(idx store.FileIndex, filter *metrics.ImportanceFilter) []string {
+	fileMaxScore := make(map[string]float64)
+	for path, entry := range idx {
+		maxScore := 0.0
+		for _, fn := range entry.Functions {
+			id := store.FuncID(fn)
+			if m, ok := filter.Metrics()[id]; ok && m.ImportanceScore > maxScore {
+				maxScore = m.ImportanceScore
+			}
+		}
+		fileMaxScore[path] = maxScore
+	}
+
+	paths := make([]string, 0, len(idx))
+	for p := range idx {
+		paths = append(paths, p)
+	}
+	sort.SliceStable(paths, func(i, j int) bool {
+		return fileMaxScore[paths[i]] > fileMaxScore[paths[j]]
+	})
+	return paths
+}
+
+// formatShortSignature truncates long signatures for skeleton display.
+func formatShortSignature(sig string) string {
+	if len(sig) > 80 {
+		return sig[:77] + "..."
+	}
+	return sig
 }
