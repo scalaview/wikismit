@@ -67,3 +67,8 @@ func NewExploreAgent(client llm.Client, cfg *ExploreConfig) *ExploreAgent {
 	}
 	return &ExploreAgent{client: client, cfg: cfg}
 }
+
+// Name returns the agent's name for logging and identification.
+func (a *ExploreAgent) Name() string {
+	return "explore"
+}

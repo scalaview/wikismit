@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/scalaview/wikismit/internal/agent"
 	"github.com/scalaview/wikismit/internal/metrics"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
@@ -35,7 +36,26 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 		skeleton = BuildPlannerSkeleton(idx, cfg.Agent.SkeletonMaxTokens)
 	}
 
-	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold)
+	// Project structure exploration (optional, controlled by config)
+	var explorationContext string
+	if cfg.Analysis.Explore != nil && cfg.Analysis.Explore.Enabled {
+		exploreAgent, err := NewPlannerAgent(AgentTypeExplore, client, cfg)
+		if err != nil {
+			plannerLogger.Warn("failed to create explore agent", "error", err)
+		} else {
+			metricsData, _ := store.ReadMetrics(cfg.ArtifactsDir)
+			if ea, ok := exploreAgent.(*agent.ExploreAgent); ok {
+				result, err := ea.Run(ctx, idx, nil, metricsData)
+				if err != nil {
+					plannerLogger.Warn("project exploration failed", "error", err)
+				} else {
+					explorationContext = buildExplorationContext(result)
+				}
+			}
+		}
+	}
+
+	prompt := buildPlannerPrompt(skeleton, cfg.Analysis.SharedModuleThreshold) + explorationContext
 
 	parseErrors := make([]string, 0, 3)
 	for attempt := range 3 {
@@ -105,4 +125,14 @@ func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 	}
 
 	return nil
+}
+
+func buildExplorationContext(result *agent.ExploreResult) string {
+	var sb strings.Builder
+	sb.WriteString("\n\n<project_exploration>\nThe following files/functions were identified as architecturally important:\n")
+	for _, req := range result.Requests {
+		sb.WriteString(fmt.Sprintf("- %s %s: %s\n", req.Type, req.Target, req.Reason))
+	}
+	sb.WriteString("</project_exploration>")
+	return sb.String()
 }

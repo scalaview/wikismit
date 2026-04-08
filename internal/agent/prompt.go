@@ -7,10 +7,16 @@ import (
 
 	"github.com/scalaview/wikismit/internal/agent/prompt"
 	logpkg "github.com/scalaview/wikismit/internal/log"
-	"github.com/scalaview/wikismit/internal/planner"
+	"github.com/scalaview/wikismit/pkg/store"
 )
 
 var logger = logpkg.New(false)
+
+// SkeletonWithSummaryBuilderFunc builds a skeleton with summary. Injected by the
+// planner's agent factory to break the circular import (planner → agent → planner).
+var SkeletonWithSummaryBuilderFunc = func(files []string, idx store.FileIndex, maxTokens int) string {
+	return "" // default: no-op, factory overrides
+}
 
 type AgentPromptData struct {
 	SystemMsg string
@@ -18,7 +24,7 @@ type AgentPromptData struct {
 }
 
 func BuildAgentPrompt(input *AgentInput) *AgentPromptData {
-	skeleton := planner.BuildSkeletonOnlyWithSummary(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
+	skeleton := SkeletonWithSummaryBuilderFunc(input.Module.Files, input.FileIndex, input.Config.Agent.SkeletonMaxTokens)
 	sharedBlock := buildSharedModulesBlock(input)
 
 	var sysBuf bytes.Buffer
