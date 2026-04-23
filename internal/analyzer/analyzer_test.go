@@ -2,12 +2,14 @@ package analyzer
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/log"
 	"github.com/scalaview/wikismit/pkg/store"
 )
@@ -35,6 +37,19 @@ func TestNewAnalyzerStoresExcludePatternsAndRegistry(t *testing.T) {
 		if analyzer.excludePatterns[idx] != pattern {
 			t.Fatalf("excludePatterns[%d] = %q, want %q", idx, analyzer.excludePatterns[idx], pattern)
 		}
+	}
+}
+
+func TestNewAnalyzerPassesEventFlowEnablementToFunctionSummaryAgent(t *testing.T) {
+	cfg := generateConfigForTest(t)
+	cfg.EventFlow = &configpkg.EventFlowConfig{Enabled: true}
+
+	analyzer := NewAnalyzer(cfg)
+	if analyzer == nil || analyzer.funcSummaryAgent == nil {
+		t.Fatal("NewAnalyzer() did not initialize function summary agent config")
+	}
+	if !analyzer.funcSummaryAgent.EventFlowEnabled() {
+		t.Fatal("FunctionSummaryAgent cfg EnableEventFlow = false, want true")
 	}
 }
 
@@ -246,6 +261,73 @@ func TestRunPhase1WritesFileIndexAndDepGraph(t *testing.T) {
 	if validateCall.ResolvedTarget != "internal/auth/jwt.go#ValidateToken" {
 		t.Fatalf("resolved target = %q, want %q", validateCall.ResolvedTarget, "internal/auth/jwt.go#ValidateToken")
 	}
+}
+
+func TestExecuteFunctionSummaryAndPersistEventFactsWritesDerivedEventFactIndex(t *testing.T) {
+	artifactsDir := t.TempDir()
+	idx := store.FileIndex{
+		"internal/auth/service.go": {
+			Path: "internal/auth/service.go",
+			Functions: []*store.FunctionDecl{{
+				Name: "HandleRequest",
+				Path: "internal/auth/service.go",
+				Src:  "func HandleRequest() error {\n\treturn nil\n}",
+			}},
+		},
+	}
+	metrics := store.MetricsMap{}
+	runner := &phase1TestSummaryRunner{mutate: func(idx store.FileIndex) {
+		fn := idx["internal/auth/service.go"].Functions[0]
+		fn.Summary = "internal/auth/service.go#HandleRequest\nSummary: Handles the request and emits a confirmed event."
+		fn.EventFacts = &store.EventFacts{Publishes: []*store.EventFact{{
+			EventName: "user.created",
+			FuncID:    store.FuncID(fn),
+			Line:      12,
+			Evidence:  "bus.Publish(user.created)",
+		}}}
+	}}
+
+	if err := executeFunctionSummaryAndPersistEventFacts(context.Background(), runner, idx, metrics, artifactsDir, nil); err != nil {
+		t.Fatalf("executeFunctionSummaryAndPersistEventFacts() error = %v", err)
+	}
+
+	storedIndex, err := store.ReadFileIndex(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadFileIndex() error = %v", err)
+	}
+	if storedIndex["internal/auth/service.go"].Functions[0].EventFacts == nil {
+		t.Fatal("stored file index missing event facts from summary stage")
+	}
+
+	eventIndex, err := store.ReadEventFactIndex(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadEventFactIndex() error = %v", err)
+	}
+	if len(eventIndex.Events) != 1 {
+		t.Fatalf("len(EventFactIndex.Events) = %d, want 1", len(eventIndex.Events))
+	}
+	if got := eventIndex.Events[0].EventName; got != "user.created" {
+		t.Fatalf("EventFactIndex.Events[0].EventName = %q, want user.created", got)
+	}
+	if got := eventIndex.Events[0].Publishers[0].FuncID; got != "internal/auth/service.go#HandleRequest" {
+		t.Fatalf("EventFactIndex.Events[0].Publishers[0].FuncID = %q, want internal/auth/service.go#HandleRequest", got)
+	}
+	if runner.calls != 1 {
+		t.Fatalf("runner.calls = %d, want 1", runner.calls)
+	}
+}
+
+type phase1TestSummaryRunner struct {
+	calls  int
+	mutate func(store.FileIndex)
+}
+
+func (r *phase1TestSummaryRunner) ExecuteFunctionSummary(_ context.Context, idx store.FileIndex, _ store.MetricsMap) error {
+	r.calls++
+	if r.mutate != nil {
+		r.mutate(idx)
+	}
+	return nil
 }
 
 func TestRunPhase1IsIdempotentForUnchangedRepo(t *testing.T) {

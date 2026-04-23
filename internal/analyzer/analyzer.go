@@ -43,6 +43,7 @@ func NewAnalyzer(cfg *configpkg.Config) *Analyzer {
 			DependencyDepth:     cfg.Analysis.FunctionSummaryAgentConfig.DependencyDepth,
 			Language:            cfg.Language,
 			ImportanceThreshold: cfg.Analysis.ImportanceThreshold,
+			EnableEventFlow:     cfg.EventFlow != nil && cfg.EventFlow.Enabled,
 		}),
 	}
 }
