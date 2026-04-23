@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scalaview/wikismit/internal/analyzer"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
 	"github.com/scalaview/wikismit/internal/log"
@@ -18,13 +17,18 @@ import (
 
 func TestMain(m *testing.M) {
 	log.SetDefaultLogger(log.New(true))
+	os.Exit(m.Run())
 }
 
 func writeCLIConfig(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte(strings.TrimSpace(body)+"\n"), 0o644); err != nil {
+	content := strings.TrimSpace(body)
+	if !strings.HasPrefix(content, "site:") && !strings.Contains(content, "\nsite:") {
+		content += "\nsite: {}"
+	}
+	if err := os.WriteFile(path, []byte(content+"\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
@@ -197,12 +201,13 @@ func TestGeneratePrintsConfigErrorsToStderr(t *testing.T) {
 }
 
 func sampleGenerateConfig(repoDir, artifactsDir string) *configpkg.Config {
-	return &configpkg.Config{
+	cfg := &configpkg.Config{
 		RepoPath:     repoDir,
 		OutputDir:    filepath.Join(artifactsDir, "docs"),
 		ArtifactsDir: artifactsDir,
 		Analysis: &configpkg.AnalysisConfig{
-			SharedModuleThreshold: 3,
+			SharedModuleThreshold:      3,
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{},
 		},
 		Agent: &configpkg.AgentConfig{
 			Concurrency:       2,
@@ -212,7 +217,10 @@ func sampleGenerateConfig(repoDir, artifactsDir string) *configpkg.Config {
 			AgentModel: "agent-test-model",
 			MaxTokens:  2048,
 		},
+		Site: &configpkg.SiteConfig{},
 	}
+	cfg.Analysis.FunctionSummaryAgentConfig.ContextBudget = 2048
+	return cfg
 }
 
 func TestGenerateCommandReportsPhase4SummaryToStderr(t *testing.T) {
@@ -230,6 +238,7 @@ analysis:
 agent:
   concurrency: 2
   skeleton_max_tokens: 3000
+site: {}
 `)
 
 	originalFactory := agentClientFactory
@@ -347,7 +356,7 @@ agent:
 	}
 }
 
-func TestUpdateCommandUsesChangedFilesOverrideForSingleModuleRerun(t *testing.T) {
+func TestUpdateCommandNavPlanUsesChangedFilesOverrideForSingleModuleRerun(t *testing.T) {
 	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
 	artifactsDir := t.TempDir()
 	outputDir := t.TempDir()
@@ -365,6 +374,7 @@ analysis:
 agent:
   concurrency: 2
   skeleton_max_tokens: 3000
+site: {}
 `)
 
 	if err := store.WriteFileIndex(artifactsDir, store.FileIndex{
@@ -381,11 +391,16 @@ agent:
 	}); err != nil {
 		t.Fatalf("WriteDepGraph() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{
-		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
-		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
-		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
-	}}); err != nil {
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Version: "planner/v2",
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Type:  "generated",
+			Title: "Generated Overview",
+			Items: []*store.NavigationItem{{Title: "Auth", Path: "docs/modules/auth.md"}, {Title: "API", Path: "docs/modules/api.md"}, {Title: "Logger", Path: "docs/shared/logger.md"}},
+		}}}, Modules: []*store.Module{
+			{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}, NavigationRefs: []string{"generated"}},
+			{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}, NavigationRefs: []string{"generated"}},
+			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true, NavigationRefs: []string{"generated"}},
+		}}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{"logger": {Summary: "Shared logger helpers."}}); err != nil {
@@ -429,9 +444,22 @@ agent:
 	if !strings.Contains(stdout, "Incremental update complete") {
 		t.Fatalf("stdout = %q, want completion message", stdout)
 	}
+	plan, err := store.ReadNavPlan(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadNavPlan() error = %v", err)
+	}
+	if plan.Version != "planner/v2" {
+		t.Fatalf("plan.Version = %q, want %q", plan.Version, "planner/v2")
+	}
+	if plan.Navigation == nil || len(plan.Navigation.Sections) != 1 {
+		t.Fatalf("plan.Navigation = %#v, want one section", plan.Navigation)
+	}
+	if len(plan.Modules) != 3 || len(plan.Modules[0].NavigationRefs) != 1 || plan.Modules[0].NavigationRefs[0] != "generated" {
+		t.Fatalf("plan.Modules = %#v, want navigation-compatible modules", plan.Modules)
+	}
 }
 
-func TestUpdateCommandRerunsDependentsWhenSharedModuleChanges(t *testing.T) {
+func TestUpdateCommandNavPlanRerunsDependentsWhenSharedModuleChanges(t *testing.T) {
 	repoDir := filepath.Join("..", "..", "testdata", "sample_repo")
 	artifactsDir := t.TempDir()
 	outputDir := t.TempDir()
@@ -450,25 +478,55 @@ analysis:
 agent:
   concurrency: 2
   skeleton_max_tokens: 3000
+site: {}
 `)
 
-	if err := analyzer.RunPhase1(&configpkg.Config{
-		RepoPath:     repoDir,
-		ArtifactsDir: artifactsDir,
-		Analysis:     &configpkg.AnalysisConfig{},
+	if err := store.WriteFileIndex(artifactsDir, store.FileIndex{
+		"internal/auth/jwt.go":    {},
+		"internal/api/handler.go": {},
+		"internal/db/client.go":   {},
+		"pkg/logger/logger.go":    {},
 	}); err != nil {
-		t.Fatalf("RunPhase1() error = %v", err)
+		t.Fatalf("WriteFileIndex() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{
-		{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
-		{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
-		{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"logger"}},
-		{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true},
-	}}); err != nil {
+	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{
+		"internal/auth/jwt.go":    {"pkg/logger/logger.go"},
+		"internal/api/handler.go": {"pkg/logger/logger.go"},
+		"internal/db/client.go":   {"pkg/logger/logger.go"},
+		"pkg/logger/logger.go":    {},
+	}); err != nil {
+		t.Fatalf("WriteDepGraph() error = %v", err)
+	}
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Version: "planner/v2",
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Type:  "generated",
+			Title: "Generated Overview",
+			Items: []*store.NavigationItem{{Title: "Auth", Path: "docs/modules/auth.md"}, {Title: "API", Path: "docs/modules/api.md"}, {Title: "DB", Path: "docs/modules/db.md"}, {Title: "Logger", Path: "docs/shared/logger.md"}},
+		}}}, Modules: []*store.Module{
+			{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", DependsOnShared: []string{"logger"}, NavigationRefs: []string{"generated"}},
+			{ID: "api", Files: []string{"internal/api/handler.go"}, Owner: "agent", DependsOnShared: []string{"logger"}, NavigationRefs: []string{"generated"}},
+			{ID: "db", Files: []string{"internal/db/client.go"}, Owner: "agent", DependsOnShared: []string{"logger"}, NavigationRefs: []string{"generated"}},
+			{ID: "logger", Files: []string{"pkg/logger/logger.go"}, Owner: "shared_preprocessor", Shared: true, NavigationRefs: []string{"generated"}},
+		}}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteSharedContext(artifactsDir, store.SharedContext{"logger": {Summary: "stale logger summary"}}); err != nil {
 		t.Fatalf("WriteSharedContext() error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(artifactsDir, "module_docs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(module_docs) error = %v", err)
+	}
+	for _, moduleDoc := range []struct {
+		name    string
+		content string
+	}{
+		{name: "auth.md", content: "# Existing Auth"},
+		{name: "api.md", content: "# Existing API"},
+		{name: "db.md", content: "# Existing DB"},
+	} {
+		if err := os.WriteFile(filepath.Join(artifactsDir, "module_docs", moduleDoc.name), []byte(moduleDoc.content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s) error = %v", moduleDoc.name, err)
+		}
 	}
 
 	originalFactory := agentClientFactory
@@ -508,6 +566,19 @@ agent:
 	}
 	if !strings.Contains(stdout, "Incremental update complete") {
 		t.Fatalf("stdout = %q, want completion message", stdout)
+	}
+	plan, err := store.ReadNavPlan(artifactsDir)
+	if err != nil {
+		t.Fatalf("ReadNavPlan() error = %v", err)
+	}
+	if plan.Version != "planner/v2" {
+		t.Fatalf("plan.Version = %q, want %q", plan.Version, "planner/v2")
+	}
+	if plan.Navigation == nil || len(plan.Navigation.Sections) != 1 {
+		t.Fatalf("plan.Navigation = %#v, want one section", plan.Navigation)
+	}
+	if len(plan.Modules) != 4 || len(plan.Modules[0].NavigationRefs) != 1 || plan.Modules[0].NavigationRefs[0] != "generated" {
+		t.Fatalf("plan.Modules = %#v, want navigation-compatible modules", plan.Modules)
 	}
 }
 

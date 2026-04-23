@@ -23,6 +23,7 @@ import (
 
 func TestMain(m *testing.M) {
 	log.SetDefaultLogger(log.New(true))
+	os.Exit(m.Run())
 }
 
 func TestRunFullGenerateVerboseLoggingIncludesFallbackPhaseBoundariesInOrder(t *testing.T) {
@@ -142,6 +143,7 @@ func TestRunFullGenerateWithoutVerboseOmitsFallbackPhaseBoundaryDebugLogs(t *tes
 			MaxTokens:         1024,
 			Temperature:       0.2,
 		},
+		Site: &configpkg.SiteConfig{},
 	}
 	client := llm.NewMockClient(
 		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
@@ -189,19 +191,27 @@ func TestRunIncrementalFallsBackToFullGenerateWhenArtifactsMissing(t *testing.T)
 	}
 }
 
-func TestRunIncrementalUsesChangedFilesOverrideWithoutOpeningGit(t *testing.T) {
+func TestRunIncrementalNavPlanUsesChangedFilesOverrideWithoutOpeningGit(t *testing.T) {
 	artifactsDir := t.TempDir()
 	if err := writeMinimalArtifacts(artifactsDir); err != nil {
 		t.Fatalf("writeMinimalArtifacts() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}); err != nil {
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{
+		Version: "planner/v2",
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Type:  "generated",
+			Title: "Generated Overview",
+			Items: []*store.NavigationItem{{Title: "Auth", Path: "docs/modules/auth.md", EntryPoint: "internal/auth/jwt.go#GenerateToken"}},
+		}}},
+		Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", NavigationRefs: []string{"generated"}}},
+	}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{"internal/auth/jwt.go": {}}); err != nil {
 		t.Fatalf("WriteDepGraph() error = %v", err)
 	}
 
-	cfg := &configpkg.Config{ArtifactsDir: artifactsDir}
+	cfg := &configpkg.Config{ArtifactsDir: artifactsDir, Agent: &configpkg.AgentConfig{Concurrency: 1}}
 	client := llm.NewMockClient()
 
 	originalGetter := getChangedFiles
@@ -224,6 +234,15 @@ func TestRunIncrementalUsesChangedFilesOverrideWithoutOpeningGit(t *testing.T) {
 		return nil
 	}
 	runComposer = func(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph) error {
+		if plan.Version != "planner/v2" {
+			t.Fatalf("plan.Version = %q, want %q", plan.Version, "planner/v2")
+		}
+		if plan.Navigation == nil || len(plan.Navigation.Sections) != 1 {
+			t.Fatalf("plan.Navigation = %#v, want one section", plan.Navigation)
+		}
+		if len(plan.Modules) != 1 || len(plan.Modules[0].NavigationRefs) != 1 || plan.Modules[0].NavigationRefs[0] != "generated" {
+			t.Fatalf("plan.Modules[0].NavigationRefs = %#v, want [generated]", plan.Modules)
+		}
 		return nil
 	}
 	reanalyzeChangedFunc = func(changes []*gitdiff.FileChange, idx store.FileIndex, cfg *configpkg.Config) (store.FileIndex, error) {
@@ -254,7 +273,10 @@ func TestReanalyzeChangedUpdatesModifiedAndAddedFiles(t *testing.T) {
 	cfg := &configpkg.Config{
 		RepoPath:     repoPath,
 		ArtifactsDir: t.TempDir(),
-		Analysis:     &configpkg.AnalysisConfig{},
+		Analysis: &configpkg.AnalysisConfig{
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{},
+		},
+		LLM: &configpkg.LLMConfig{},
 	}
 	idx := store.FileIndex{
 		"existing.go": {ContentHash: "old-hash"},
@@ -312,7 +334,10 @@ func TestReanalyzeChangedHandlesRenamesByDroppingOldPathAndParsingNewPath(t *tes
 	cfg := &configpkg.Config{
 		RepoPath:     repoPath,
 		ArtifactsDir: t.TempDir(),
-		Analysis:     &configpkg.AnalysisConfig{},
+		Analysis: &configpkg.AnalysisConfig{
+			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{},
+		},
+		LLM: &configpkg.LLMConfig{},
 	}
 	idx := store.FileIndex{
 		"old.go": {ContentHash: "old-hash"},
@@ -383,7 +408,7 @@ func TestRunForProcessesOnlyAffectedAgentModules(t *testing.T) {
 
 	client := llm.NewMockClient("# Auth")
 	err := agent.RunFor(context.Background(), []*store.Module{{ID: "auth", Owner: "agent"}}, &agent.AgentInput{
-		Config: &configpkg.Config{LLM: &configpkg.LLMConfig{AgentModel: "agent", MaxTokens: 1024}},
+		Config: &configpkg.Config{Agent: &configpkg.AgentConfig{SkeletonMaxTokens: 3000}, LLM: &configpkg.LLMConfig{AgentModel: "agent", MaxTokens: 1024}},
 	}, client, artifactsDir, 1)
 	if err != nil {
 		t.Fatalf("RunFor() error = %v", err)
@@ -403,12 +428,20 @@ func TestRunForProcessesOnlyAffectedAgentModules(t *testing.T) {
 	}
 }
 
-func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *testing.T) {
+func TestRunIncrementalNavPlanRerunsSharedDependenciesBeforeAffectedAgentModules(t *testing.T) {
 	artifactsDir := t.TempDir()
 	if err := store.WriteFileIndex(artifactsDir, store.FileIndex{"pkg/logger/logger.go": {}}); err != nil {
 		t.Fatalf("WriteFileIndex() error = %v", err)
 	}
-	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{Modules: []*store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}}); err != nil {
+	if err := store.WriteNavPlan(artifactsDir, &store.NavPlan{
+		Version: "planner/v2",
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Type:  "generated",
+			Title: "Generated Overview",
+			Items: []*store.NavigationItem{{Title: "Logger", Path: "docs/shared/logger.md"}, {Title: "Auth", Path: "docs/modules/auth.md"}},
+		}}},
+		Modules: []*store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor", NavigationRefs: []string{"generated"}}, {ID: "auth", Owner: "agent", NavigationRefs: []string{"generated"}}},
+	}); err != nil {
 		t.Fatalf("WriteNavPlan() error = %v", err)
 	}
 	if err := store.WriteDepGraph(artifactsDir, store.DepGraph{"pkg/logger/logger.go": {}}); err != nil {
@@ -433,6 +466,12 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 		return []*store.Module{{ID: "logger", Shared: true, Owner: "shared_preprocessor"}, {ID: "auth", Owner: "agent"}}
 	}
 	runPreprocessorFor = func(ctx context.Context, affected []*store.Module, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (store.SharedContext, error) {
+		if plan.Version != "planner/v2" {
+			t.Fatalf("plan.Version = %q, want %q", plan.Version, "planner/v2")
+		}
+		if plan.Navigation == nil || len(plan.Navigation.Sections) != 1 {
+			t.Fatalf("plan.Navigation = %#v, want one section", plan.Navigation)
+		}
 		order = append(order, "preprocessor")
 		return store.SharedContext{"logger": {Summary: "logger"}}, nil
 	}
@@ -465,11 +504,19 @@ func TestRunIncrementalRerunsSharedDependenciesBeforeAffectedAgentModules(t *tes
 	}
 }
 
-func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
+func TestRunIncrementalNavPlanRunsComposerInFullAfterPartialReruns(t *testing.T) {
 	artifactsDir := t.TempDir()
 	idx := store.FileIndex{"internal/auth/jwt.go": {ContentHash: "hash"}}
 	graph := store.DepGraph{"internal/auth/jwt.go": {}}
-	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent"}}}
+	plan := &store.NavPlan{
+		Version: "planner/v2",
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Type:  "generated",
+			Title: "Generated Overview",
+			Items: []*store.NavigationItem{{Title: "Auth", Path: "docs/modules/auth.md", EntryPoint: "internal/auth/jwt.go#GenerateToken"}},
+		}}},
+		Modules: []*store.Module{{ID: "auth", Files: []string{"internal/auth/jwt.go"}, Owner: "agent", NavigationRefs: []string{"generated"}}},
+	}
 	if err := store.WriteFileIndex(artifactsDir, idx); err != nil {
 		t.Fatalf("WriteFileIndex() error = %v", err)
 	}
@@ -505,7 +552,7 @@ func TestRunIncrementalRunsComposerInFullAfterPartialReruns(t *testing.T) {
 	composerCalled := false
 	runComposer = func(gotCfg *configpkg.Config, gotPlan *store.NavPlan, gotIdx store.FileIndex, gotGraph store.DepGraph) error {
 		composerCalled = true
-		if diff := cmp.Diff(plan.Modules, gotPlan.Modules); diff != "" {
+		if diff := cmp.Diff(plan, gotPlan); diff != "" {
 			t.Fatalf("composer plan mismatch (-want +got):\n%s", diff)
 		}
 		if diff := cmp.Diff(idx, gotIdx); diff != "" {
