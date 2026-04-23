@@ -112,11 +112,33 @@ type Module struct {
 	Owner           string   `json:"owner"`
 	DependsOnShared []string `json:"depends_on_shared,omitempty"`
 	ReferencedBy    []string `json:"referenced_by,omitempty"`
+	NavigationRefs  []string `json:"navigation_refs,omitempty"`
+}
+
+type NavigationSection struct {
+	Title       string            `json:"title"`
+	Type        string            `json:"type"`
+	Description string            `json:"description,omitempty"`
+	Items       []*NavigationItem `json:"items,omitempty"`
+}
+
+type NavigationItem struct {
+	Title      string   `json:"title"`
+	Path       string   `json:"path,omitempty"`
+	EntryPoint string   `json:"entry_point,omitempty"`
+	Events     []string `json:"events,omitempty"`
+	Highlights []string `json:"highlights,omitempty"`
+}
+
+type Navigation struct {
+	Sections []*NavigationSection `json:"sections,omitempty"`
 }
 
 type NavPlan struct {
-	GeneratedAt time.Time `json:"generated_at"`
-	Modules     []*Module `json:"modules"`
+	GeneratedAt time.Time   `json:"generated_at"`
+	Version     string      `json:"version,omitempty"`
+	Navigation  *Navigation `json:"navigation,omitempty"`
+	Modules     []*Module   `json:"modules"`
 }
 
 type SharedSummary struct {
@@ -164,8 +186,8 @@ type FunctionMetrics struct {
 type MetricsMap map[string]*FunctionMetrics
 
 type EventFactIndex struct {
-	Version     string       `json:"version"`
-	GeneratedAt time.Time    `json:"generated_at"`
+	Version     string        `json:"version"`
+	GeneratedAt time.Time     `json:"generated_at"`
 	Events      []*EventEntry `json:"events"`
 }
 

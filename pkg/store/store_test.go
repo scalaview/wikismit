@@ -117,12 +117,28 @@ func sampleDepGraph() DepGraph {
 func sampleNavPlan() *NavPlan {
 	return &NavPlan{
 		GeneratedAt: time.Unix(1710000000, 0).UTC(),
+		Version:     "planner/v2",
+		Navigation: &Navigation{
+			Sections: []*NavigationSection{{
+				Type:        "generated",
+				Title:       "Generated Overview",
+				Description: "Top-level generated summary",
+				Items: []*NavigationItem{{
+					Title:      "Auth entrypoint",
+					Path:       "docs/modules/auth.md",
+					EntryPoint: "internal/auth/jwt.go#GenerateToken",
+					Events:     []string{"token.generated"},
+					Highlights: []string{"Issues JWTs"},
+				}},
+			}},
+		},
 		Modules: []*Module{{
 			ID:              "auth",
 			Files:           []string{"internal/auth/jwt.go"},
 			Shared:          false,
 			Owner:           "agent",
 			DependsOnShared: []string{"logger"},
+			NavigationRefs:  []string{"generated"},
 		}},
 	}
 }
@@ -350,6 +366,117 @@ func TestWriteAndReadNavPlanRoundTrip(t *testing.T) {
 	}
 	if got.Modules[0].ID != want.Modules[0].ID {
 		t.Fatalf("round trip mismatch: got %+v want %+v", got, want)
+	}
+}
+
+func TestWriteAndReadNavPlanRoundTripPreservesNavigationSections(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleNavPlan()
+
+	if err := WriteNavPlan(dir, want); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+
+	got, err := ReadNavPlan(dir)
+	if err != nil {
+		t.Fatalf("ReadNavPlan() error = %v", err)
+	}
+
+	if got.Version != want.Version {
+		t.Fatalf("Version = %q, want %q", got.Version, want.Version)
+	}
+	if got.Navigation == nil {
+		t.Fatal("Navigation = nil, want populated navigation")
+	}
+	if len(got.Navigation.Sections) != 1 {
+		t.Fatalf("len(Navigation.Sections) = %d, want 1", len(got.Navigation.Sections))
+	}
+	if got.Navigation.Sections[0].Type != want.Navigation.Sections[0].Type {
+		t.Fatalf("Navigation.Sections[0].Type = %q, want %q", got.Navigation.Sections[0].Type, want.Navigation.Sections[0].Type)
+	}
+	if got.Navigation.Sections[0].Items[0].EntryPoint != want.Navigation.Sections[0].Items[0].EntryPoint {
+		t.Fatalf("Navigation.Sections[0].Items[0].EntryPoint = %q, want %q", got.Navigation.Sections[0].Items[0].EntryPoint, want.Navigation.Sections[0].Items[0].EntryPoint)
+	}
+	if len(got.Modules[0].NavigationRefs) != 1 || got.Modules[0].NavigationRefs[0] != "generated" {
+		t.Fatalf("Modules[0].NavigationRefs = %#v, want [generated]", got.Modules[0].NavigationRefs)
+	}
+}
+
+func TestReadLegacyNavPlanWithoutNavigationStillSucceeds(t *testing.T) {
+	dir := t.TempDir()
+	legacy := []byte(`{"generated_at":"2024-03-09T16:00:00Z","modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","depends_on_shared":["logger"]}]}`)
+
+	if err := os.WriteFile(filepath.Join(dir, "nav_plan.json"), legacy, 0o644); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	got, err := ReadNavPlan(dir)
+	if err != nil {
+		t.Fatalf("ReadNavPlan() error = %v", err)
+	}
+
+	if got.Navigation != nil {
+		t.Fatalf("Navigation = %#v, want nil for legacy nav plan", got.Navigation)
+	}
+	if got.Version != "" {
+		t.Fatalf("Version = %q, want empty for legacy nav plan", got.Version)
+	}
+	if len(got.Modules) != 1 || got.Modules[0].ID != "auth" {
+		t.Fatalf("Modules = %#v, want one auth module", got.Modules)
+	}
+}
+
+func TestWriteNavPlanUsesSensibleNavigationJSONShape(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleNavPlan()
+
+	if err := WriteNavPlan(dir, want); err != nil {
+		t.Fatalf("WriteNavPlan() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "nav_plan.json"))
+	if err != nil {
+		t.Fatalf("os.ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	if got["version"] != "planner/v2" {
+		t.Fatalf("version = %#v, want %q", got["version"], "planner/v2")
+	}
+	navigation, ok := got["navigation"].(map[string]any)
+	if !ok {
+		t.Fatalf("navigation type = %T, want map[string]any", got["navigation"])
+	}
+	sections, ok := navigation["sections"].([]any)
+	if !ok || len(sections) != 1 {
+		t.Fatalf("navigation.sections = %#v, want one section", navigation["sections"])
+	}
+	section0, ok := sections[0].(map[string]any)
+	if !ok {
+		t.Fatalf("sections[0] type = %T, want map[string]any", sections[0])
+	}
+	if section0["type"] != "generated" {
+		t.Fatalf("sections[0].type = %#v, want %q", section0["type"], "generated")
+	}
+	items, ok := section0["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("sections[0].items = %#v, want one item", section0["items"])
+	}
+	modules, ok := got["modules"].([]any)
+	if !ok || len(modules) != 1 {
+		t.Fatalf("modules = %#v, want one module", got["modules"])
+	}
+	module0, ok := modules[0].(map[string]any)
+	if !ok {
+		t.Fatalf("modules[0] type = %T, want map[string]any", modules[0])
+	}
+	navigationRefs, ok := module0["navigation_refs"].([]any)
+	if !ok || len(navigationRefs) != 1 || navigationRefs[0] != "generated" {
+		t.Fatalf("modules[0].navigation_refs = %#v, want [generated]", module0["navigation_refs"])
 	}
 }
 
