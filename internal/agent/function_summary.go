@@ -22,6 +22,7 @@ type FunctionSummaryConfig struct {
 	DependencyDepth     int
 	Language            string
 	ImportanceThreshold float64
+	EnableEventFlow     bool
 }
 
 type FunctionSummaryAgent struct {
@@ -59,9 +60,11 @@ func newFnKey(fn *store.FunctionDecl) *fnKey {
 }
 
 type functionSummaryResult struct {
-	ID      string `json:"id"`
-	Path    string `json:"path"`
-	Summary string `json:"summary"`
+	ID         string            `json:"id"`
+	Path       string            `json:"path"`
+	Summary    string            `json:"summary"`
+	EventFacts *store.EventFacts `json:"event_facts,omitempty"`
+	EventHints *store.EventHints `json:"event_hints,omitempty"`
 }
 
 type functionSummaryResponse struct {
@@ -714,22 +717,34 @@ func (a *FunctionSummaryAgent) buildPrompt(state *runContext, currentBatch *batc
 		cfg = &FunctionSummaryConfig{}
 	}
 
-	data := &promptpkg.FunctionUserPromptData{
-		Functions: buildFunctionPromptFunctions(state, currentBatch),
-	}
-
 	var userBuf bytes.Buffer
-	if err := promptpkg.FunctionUserPromptTmp.Execute(&userBuf, data); err != nil {
-		return nil, fmt.Errorf("execute function user prompt: %w", err)
-	}
-
 	var systemBuf bytes.Buffer
-	if err := promptpkg.FunctionSystemPromptTmp.Execute(&systemBuf, &promptpkg.FunctionSystemPromptData{
-		Level:    a.cfg.DependencyDepth - 1,
-		Depth:    a.cfg.DependencyDepth,
-		Language: a.cfg.Language,
-	}); err != nil {
-		return nil, fmt.Errorf("execute function system prompt: %w", err)
+	if cfg.EnableEventFlow {
+		data := &promptpkg.EventFlowUserPromptData{
+			Functions: buildEventFlowPromptFunctions(state, currentBatch),
+		}
+		if err := promptpkg.EventFlowUserPromptTmp.Execute(&userBuf, data); err != nil {
+			return nil, fmt.Errorf("execute event flow user prompt: %w", err)
+		}
+		if err := promptpkg.EventFlowSystemPromptTmp.Execute(&systemBuf, &promptpkg.EventFlowSystemPromptData{
+			Language: a.cfg.Language,
+		}); err != nil {
+			return nil, fmt.Errorf("execute event flow system prompt: %w", err)
+		}
+	} else {
+		data := &promptpkg.FunctionUserPromptData{
+			Functions: buildFunctionPromptFunctions(state, currentBatch),
+		}
+		if err := promptpkg.FunctionUserPromptTmp.Execute(&userBuf, data); err != nil {
+			return nil, fmt.Errorf("execute function user prompt: %w", err)
+		}
+		if err := promptpkg.FunctionSystemPromptTmp.Execute(&systemBuf, &promptpkg.FunctionSystemPromptData{
+			Level:    a.cfg.DependencyDepth - 1,
+			Depth:    a.cfg.DependencyDepth,
+			Language: a.cfg.Language,
+		}); err != nil {
+			return nil, fmt.Errorf("execute function system prompt: %w", err)
+		}
 	}
 
 	return &llm.CompletionRequest{
@@ -738,6 +753,63 @@ func (a *FunctionSummaryAgent) buildPrompt(state *runContext, currentBatch *batc
 		UserMsg:   userBuf.String(),
 		MaxTokens: cfg.MaxTokens,
 	}, nil
+}
+
+func buildEventFlowPromptFunctions(state *runContext, currentBatch *batch) []*promptpkg.EventFlowFunctionStruct {
+	if state == nil || currentBatch == nil {
+		return nil
+	}
+
+	functions := make([]*promptpkg.EventFlowFunctionStruct, 0, len(currentBatch.keys))
+	for _, key := range currentBatch.keys {
+		fn := lookupFunction(state.idx, key)
+		if fn == nil {
+			continue
+		}
+
+		var calledFunctions []*promptpkg.CalledFunctionStruct
+		seenCalledFunctions := make(map[FuncSign]struct{})
+		for _, call := range fn.Calls {
+			calleeKey := resolvedInternalCallKey(state.idx, call)
+			sign := calleeKey.Sign()
+			if sign == "" {
+				continue
+			}
+			if _, seen := seenCalledFunctions[sign]; seen {
+				continue
+			}
+			seenCalledFunctions[sign] = struct{}{}
+
+			summary := strings.TrimSpace(state.summaries[sign])
+			if summary == "" {
+				continue
+			}
+			callee := lookupFunction(state.idx, calleeKey)
+			calledFunction := &promptpkg.CalledFunctionStruct{Summary: summary}
+			if callee != nil {
+				calledFunction.Path = callee.Path
+				calledFunction.Receiver = callee.Receiver
+				calledFunction.Name = callee.Name
+			} else {
+				calledFunction.Path = calleeKey.path
+				calledFunction.Receiver = calleeKey.receiver
+				calledFunction.Name = calleeKey.name
+			}
+			calledFunctions = append(calledFunctions, calledFunction)
+		}
+
+		functions = append(functions, &promptpkg.EventFlowFunctionStruct{
+			ID:              strings.TrimPrefix(string(key.Sign()), key.path+"#"),
+			Path:            fn.Path,
+			Receiver:        fn.Receiver,
+			Name:            fn.Name,
+			Signature:       fn.Signature,
+			Summary:         strings.TrimSpace(fn.Summary),
+			Src:             fn.Src,
+			CalledFunctions: calledFunctions,
+		})
+	}
+	return functions
 }
 
 func buildFunctionPromptFunctions(state *runContext, currentBatch *batch) []promptpkg.FunctionStruct {
@@ -897,6 +969,8 @@ func (a *FunctionSummaryAgent) applySummaries(rc *runContext, matches map[FuncSi
 
 		rc.summaries[sign] = match.result.Summary
 		fn.Summary = match.result.Summary
+		fn.EventFacts = match.result.EventFacts
+		fn.EventHints = match.result.EventHints
 		applied = append(applied, sign)
 	}
 
@@ -1013,7 +1087,7 @@ func (a *FunctionSummaryAgent) Run(ctx context.Context, idx store.FileIndex, met
 	}
 
 	// Filter functions below importance threshold if metrics are available
-	if len(metrics) > 0 && a.cfg != nil && a.cfg.ImportanceThreshold > 0 {
+	if len(metrics) > 0 && a.cfg != nil && a.cfg.ImportanceThreshold > 0 && !a.cfg.EnableEventFlow {
 		filtered := filterFileIndexByImportance(idx, metrics, a.cfg.ImportanceThreshold)
 		total := countFunctions(idx)
 		kept := countFunctions(filtered)
@@ -1065,6 +1139,10 @@ func (a *FunctionSummaryAgent) Run(ctx context.Context, idx store.FileIndex, met
 	}
 
 	return nil
+}
+
+func (a *FunctionSummaryAgent) EventFlowEnabled() bool {
+	return a != nil && a.cfg != nil && a.cfg.EnableEventFlow
 }
 
 // filterFileIndexByImportance creates a filtered copy of the FileIndex containing only
