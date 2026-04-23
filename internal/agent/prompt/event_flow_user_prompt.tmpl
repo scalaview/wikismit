@@ -1,0 +1,30 @@
+You are an expert technical writer and code analysis assistant.
+Please summarize the following functions and extract event flow details:
+
+{{range $fn := .Functions}}
+<function_declaration>
+Path: {{$fn.Path}}
+ID: {{$fn.ID}}
+Receiver: {{$fn.Receiver}}
+Name: {{$fn.Name}}
+Signature: {{$fn.Signature}}
+{{if $fn.Summary}}Summary:
+{{$fn.Summary}}
+{{end}}Source:
+```
+{{$fn.Src}}
+```
+{{if $fn.CalledFunctions}}
+<called_functions>
+{{range $calledFn := $fn.CalledFunctions}}{{if $calledFn.Summary}}
+<function_summary>
+Path: {{$calledFn.Path}}, Receiver: {{$calledFn.Receiver}}, Name: {{$calledFn.Name}}
+Summary:
+{{$calledFn.Summary}}
+</function_summary>
+{{end}}{{end}}
+</called_functions>
+{{end}}
+</function_declaration>
+
+{{end}}
