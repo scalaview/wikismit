@@ -10,17 +10,17 @@ import (
 )
 
 type Config struct {
-	RepoPath     string          `yaml:"repo_path"`
-	OutputDir    string          `yaml:"output_dir"`
-	ArtifactsDir string          `yaml:"artifacts_dir"`
-	Verbose      bool            `yaml:"-"`
-	LLM          *LLMConfig      `yaml:"llm"`
-	Analysis     *AnalysisConfig `yaml:"analysis"`
-	Agent        *AgentConfig    `yaml:"agent"`
-	Cache        *CacheConfig    `yaml:"cache"`
-	Site         *SiteConfig     `yaml:"site"`
+	RepoPath     string           `yaml:"repo_path"`
+	OutputDir    string           `yaml:"output_dir"`
+	ArtifactsDir string           `yaml:"artifacts_dir"`
+	Verbose      bool             `yaml:"-"`
+	LLM          *LLMConfig       `yaml:"llm"`
+	Analysis     *AnalysisConfig  `yaml:"analysis"`
+	Agent        *AgentConfig     `yaml:"agent"`
+	Cache        *CacheConfig     `yaml:"cache"`
+	Site         *SiteConfig      `yaml:"site"`
 	EventFlow    *EventFlowConfig `yaml:"event_flow"`
-	Language     string          `yaml:"language"`
+	Language     string           `yaml:"language"`
 }
 
 type EventFlowConfig struct {
@@ -48,6 +48,13 @@ type AnalysisConfig struct {
 	ImportanceThreshold        float64                     `yaml:"importance_threshold"`
 	FunctionSummaryAgentConfig *FunctionSummaryAgentConfig `yaml:"function_summary_agent"`
 	Explore                    *ExploreConfig              `yaml:"explore"`
+	InteractivePlanner         *InteractivePlannerConfig   `yaml:"interactive_planner"`
+}
+
+type InteractivePlannerConfig struct {
+	Enabled             bool `yaml:"enabled"`
+	MaxRounds           int  `yaml:"max_rounds"`
+	MaxRequestsPerRound int  `yaml:"max_requests_per_round"`
 }
 
 // ExploreConfig controls the project structure exploration phase.
@@ -116,6 +123,11 @@ func defaultConfig() Config {
 				MinFuncLines:  5,
 				MinCalledBy:   1,
 				MinImportance: 0.05,
+			},
+			InteractivePlanner: &InteractivePlannerConfig{
+				Enabled:             false,
+				MaxRounds:           4,
+				MaxRequestsPerRound: 5,
 			},
 		},
 		Agent: &AgentConfig{
@@ -224,6 +236,16 @@ func applyDefaults(cfg *Config) {
 			cfg.Analysis.Explore.MinImportance = 0.05
 		}
 	}
+	if cfg.Analysis.InteractivePlanner == nil {
+		cfg.Analysis.InteractivePlanner = defaults.Analysis.InteractivePlanner
+	} else {
+		if cfg.Analysis.InteractivePlanner.MaxRounds == 0 {
+			cfg.Analysis.InteractivePlanner.MaxRounds = defaults.Analysis.InteractivePlanner.MaxRounds
+		}
+		if cfg.Analysis.InteractivePlanner.MaxRequestsPerRound == 0 {
+			cfg.Analysis.InteractivePlanner.MaxRequestsPerRound = defaults.Analysis.InteractivePlanner.MaxRequestsPerRound
+		}
+	}
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -277,6 +299,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Analysis.ImportanceThreshold < 0 || c.Analysis.ImportanceThreshold > 1 {
 		errs = append(errs, fmt.Errorf("Analysis.ImportanceThreshold must be between 0 and 1, got %.2f", c.Analysis.ImportanceThreshold))
+	}
+	if c.Analysis.InteractivePlanner != nil {
+		if c.Analysis.InteractivePlanner.MaxRounds < 1 {
+			errs = append(errs, fmt.Errorf("Analysis.InteractivePlanner.MaxRounds must be >= 1, got %d", c.Analysis.InteractivePlanner.MaxRounds))
+		}
+		if c.Analysis.InteractivePlanner.MaxRequestsPerRound < 1 {
+			errs = append(errs, fmt.Errorf("Analysis.InteractivePlanner.MaxRequestsPerRound must be >= 1, got %d", c.Analysis.InteractivePlanner.MaxRequestsPerRound))
+		}
 	}
 
 	if len(errs) == 0 {
