@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
@@ -69,7 +68,7 @@ func RunInteractivePlanner(ctx context.Context, idx store.FileIndex, graph store
 			if err != nil {
 				return nil, err
 			}
-			plan.GeneratedAt = time.Now().UTC()
+			stampNavPlanMetadata(plan)
 			return plan, nil
 		}
 

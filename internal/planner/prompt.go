@@ -8,10 +8,11 @@ import (
 
 func buildPlannerPrompt(skeleton string, threshold int) string {
 	return fmt.Sprintf(`You are a software architect. Given this repository skeleton, group the files
-into logical documentation modules. Identify shared utilities used by %d+ modules.
+into logical documentation modules and richer navigation sections. Identify shared utilities used by %d+ modules.
 
 Rules:
 - Every file must appear in exactly one module.
+- Modules stay required for compatibility, even when navigation is present.
 - Every module must include an owner field.
 - Shared modules must have owner: "shared_preprocessor".
 - Non-shared modules must have owner: "agent".
@@ -19,13 +20,45 @@ Rules:
 - owner must be one of: "agent" or "shared_preprocessor".
 - If shared is true, owner must be "shared_preprocessor".
 - If shared is false, owner must be "agent".
+- Also return version and navigation.sections.
+- Allowed navigation section types: generated, business, events, architecture, modules, api.
+- navigation groups concepts; modules still own files and coverage.
+- Modules may include navigation_refs to the section types they belong to.
 - Functions marked with ★ are high-impact. Consider making them module entry points or giving them dedicated documentation sections.
 - Respond ONLY with valid JSON. No preamble.
 
-Schema: { modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[] }] }
+Schema: { version, navigation: { sections: [{ type, title, description, items: [{ title, path, entry_point, events[], highlights[] }] }] }, modules: [{ id, files[], shared, owner, depends_on_shared[], referenced_by[], navigation_refs[] }] }
 
 Example:
 {
+  "version": "planner/v2",
+  "navigation": {
+    "sections": [
+      {
+        "type": "generated",
+        "title": "Generated Overview",
+        "description": "High-level generated entrypoints",
+        "items": [
+          {
+            "title": "Planner overview",
+            "path": "docs/modules/planner.md",
+            "entry_point": "internal/planner/planner.go#RunPlanner",
+            "highlights": ["Coordinates module planning"]
+          }
+        ]
+      },
+      {
+        "type": "modules",
+        "title": "Modules",
+        "items": [
+          {
+            "title": "Planner module",
+            "path": "docs/modules/planner.md"
+          }
+        ]
+      }
+    ]
+  },
   "modules": [
     {
       "id": "planner",
@@ -33,7 +66,8 @@ Example:
       "shared": false,
       "owner": "agent",
       "depends_on_shared": ["config", "llm", "store"],
-      "referenced_by": []
+      "referenced_by": [],
+      "navigation_refs": ["generated", "modules"]
     },
     {
       "id": "store",
@@ -41,7 +75,8 @@ Example:
       "shared": true,
       "owner": "shared_preprocessor",
       "depends_on_shared": [],
-      "referenced_by": ["planner", "agent"]
+      "referenced_by": ["planner", "agent"],
+      "navigation_refs": ["architecture", "api"]
     }
   ]
 }
@@ -72,13 +107,17 @@ Available request types:
 Rules:
 - If you still need evidence, return JSON with: {"round":N,"understanding":"...","requests":[...]}
 - If you are ready to finish, return JSON with: {"round":N,"navigation":{"modules":[...]}}
+- Final navigation should include version and may include navigation.sections.
 - Final navigation must stay modules-compatible for now.
 - Every file must appear in exactly one module.
+- Modules stay required for compatibility, even when navigation.sections is present.
 - Every module must include owner.
 - Shared modules must have owner: "shared_preprocessor".
 - Non-shared modules must have owner: "agent".
 - owner must never be null.
 - owner must be one of: "agent" or "shared_preprocessor".
+- Allowed navigation section types: generated, business, events, architecture, modules, api.
+- Modules may include navigation_refs to section types.
 - Shared utilities are files used by %d+ modules.
 - Respond ONLY with valid JSON. No markdown fences or prose.
 
@@ -109,8 +148,8 @@ Rules:
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Modules schema:\n")
-	sb.WriteString(`{"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[]}]}`)
+	sb.WriteString("Navigation schema:\n")
+	sb.WriteString(`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated Overview","description":"...","items":[{"title":"Entry","path":"docs/modules/module.md","entry_point":"path/to/file.go#Name","events":["domain.event"],"highlights":["important detail"]}]},{"type":"modules","title":"Modules","items":[{"title":"Module","path":"docs/modules/module.md"}]}]},"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[],"navigation_refs":["generated","modules"]}]}`)
 	sb.WriteString("\n\nSkeleton:\n")
 	sb.WriteString(contextState.Skeleton)
 

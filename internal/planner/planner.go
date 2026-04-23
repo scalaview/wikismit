@@ -14,6 +14,17 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
+const plannerNavPlanVersion = "planner/v2"
+
+var allowedNavigationSectionTypes = map[string]struct{}{
+	"generated":    {},
+	"business":     {},
+	"events":       {},
+	"architecture": {},
+	"modules":      {},
+	"api":          {},
+}
+
 func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (*store.NavPlan, error) {
 	if cfg.Analysis != nil && cfg.Analysis.InteractivePlanner != nil && cfg.Analysis.InteractivePlanner.Enabled {
 		return RunInteractivePlanner(ctx, idx, graph, cfg, client)
@@ -86,7 +97,7 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 				prompt = prompt + fmt.Sprintf("\n\nPrevious response failed validation: %v. Try again.", err)
 				continue
 			}
-			plan.GeneratedAt = time.Now().UTC()
+			stampNavPlanMetadata(&plan)
 			return &plan, nil
 		} else {
 			parseErrors = append(parseErrors, fmt.Sprintf("attempt %d: parse nav plan: %v", attempt+1, err))
@@ -100,6 +111,18 @@ func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, 
 func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 	seen := make(map[string]string, len(idx))
 	seenModuleIDs := make(map[string]struct{}, len(plan.Modules))
+	navigationSections := make(map[string]struct{})
+	if plan.Navigation != nil {
+		for _, section := range plan.Navigation.Sections {
+			if section == nil {
+				continue
+			}
+			if _, ok := allowedNavigationSectionTypes[section.Type]; !ok {
+				return fmt.Errorf("unknown navigation section type %q", section.Type)
+			}
+			navigationSections[section.Type] = struct{}{}
+		}
+	}
 	for _, module := range plan.Modules {
 		if module.ID == "" {
 			return fmt.Errorf("empty module id")
@@ -110,6 +133,11 @@ func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 		seenModuleIDs[module.ID] = struct{}{}
 		if module.Owner != "agent" && module.Owner != "shared_preprocessor" {
 			return fmt.Errorf("invalid owner %q for module %q", module.Owner, module.ID)
+		}
+		for _, ref := range module.NavigationRefs {
+			if _, ok := navigationSections[ref]; !ok {
+				return fmt.Errorf("unknown navigation ref %q for module %q", ref, module.ID)
+			}
 		}
 		for _, file := range module.Files {
 			if _, ok := idx[file]; !ok {
@@ -129,6 +157,17 @@ func validateNavPlan(plan store.NavPlan, idx store.FileIndex) error {
 	}
 
 	return nil
+}
+
+func stampNavPlanMetadata(plan *store.NavPlan) {
+	if plan == nil {
+		return
+	}
+	plan.GeneratedAt = time.Now().UTC()
+	plan.Version = plannerNavPlanVersion
+	if plan.Navigation == nil {
+		return
+	}
 }
 
 func buildExplorationContext(result *agent.ExploreResult) string {
