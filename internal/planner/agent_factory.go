@@ -38,6 +38,7 @@ func newExploreAgent(client llm.Client, cfg *configpkg.Config) *agent.ExploreAge
 		MinFuncLines:  cfg.Analysis.Explore.MinFuncLines,
 		MinCalledBy:   cfg.Analysis.Explore.MinCalledBy,
 		MinImportance: cfg.Analysis.Explore.MinImportance,
+		IncludeEventHints: cfg.EventFlow != nil && cfg.EventFlow.IncludeHintsInRound1,
 	}
 
 	// Wire skeleton builder: inject planner's BuildExploreSkeleton into agent
@@ -48,6 +49,7 @@ func newExploreAgent(client llm.Client, cfg *configpkg.Config) *agent.ExploreAge
 			MinFuncLines:  agentCfg.MinFuncLines,
 			MinCalledBy:   agentCfg.MinCalledBy,
 			MinImportance: agentCfg.MinImportance,
+			IncludeEventHints: plannerFilterCfg.IncludeEventHints,
 		}
 		return BuildExploreSkeleton(idx, maxTokens, filter, plannerCfg)
 	}
