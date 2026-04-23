@@ -337,3 +337,119 @@ agent:
 		t.Fatal("EventFlow.IncludeHintsInRound1 = false, want true")
 	}
 }
+
+func TestLoadConfigAppliesInteractivePlannerDefaults(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+agent:
+  concurrency: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Analysis == nil {
+		t.Fatal("Analysis = nil, want defaults")
+	}
+	if cfg.Analysis.InteractivePlanner == nil {
+		t.Fatal("Analysis.InteractivePlanner = nil, want defaults")
+	}
+	if cfg.Analysis.InteractivePlanner.Enabled {
+		t.Fatal("Analysis.InteractivePlanner.Enabled = true, want false by default")
+	}
+	if cfg.Analysis.InteractivePlanner.MaxRounds != 4 {
+		t.Fatalf("Analysis.InteractivePlanner.MaxRounds = %d, want 4", cfg.Analysis.InteractivePlanner.MaxRounds)
+	}
+	if cfg.Analysis.InteractivePlanner.MaxRequestsPerRound != 5 {
+		t.Fatalf("Analysis.InteractivePlanner.MaxRequestsPerRound = %d, want 5", cfg.Analysis.InteractivePlanner.MaxRequestsPerRound)
+	}
+}
+
+func TestLoadConfigReadsExplicitInteractivePlannerSettings(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+analysis:
+  interactive_planner:
+    enabled: true
+    max_rounds: 6
+    max_requests_per_round: 3
+agent:
+  concurrency: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Analysis == nil || cfg.Analysis.InteractivePlanner == nil {
+		t.Fatal("Analysis.InteractivePlanner = nil, want explicit config")
+	}
+	if !cfg.Analysis.InteractivePlanner.Enabled {
+		t.Fatal("Analysis.InteractivePlanner.Enabled = false, want true")
+	}
+	if cfg.Analysis.InteractivePlanner.MaxRounds != 6 {
+		t.Fatalf("Analysis.InteractivePlanner.MaxRounds = %d, want 6", cfg.Analysis.InteractivePlanner.MaxRounds)
+	}
+	if cfg.Analysis.InteractivePlanner.MaxRequestsPerRound != 3 {
+		t.Fatalf("Analysis.InteractivePlanner.MaxRequestsPerRound = %d, want 3", cfg.Analysis.InteractivePlanner.MaxRequestsPerRound)
+	}
+}
+
+func TestValidateRejectsInteractivePlannerMaxRoundsBelowOne(t *testing.T) {
+	cfg := &Config{
+		RepoPath: t.TempDir(),
+		LLM:      &LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
+		Analysis: &AnalysisConfig{
+			SharedModuleThreshold: 1,
+			InteractivePlanner: &InteractivePlannerConfig{
+				Enabled:             true,
+				MaxRounds:           0,
+				MaxRequestsPerRound: 1,
+			},
+		},
+		Agent: &AgentConfig{Concurrency: 4},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want validation error")
+	}
+	if !strings.Contains(err.Error(), "Analysis.InteractivePlanner.MaxRounds") {
+		t.Fatalf("Validate() error = %v, want MaxRounds violation", err)
+	}
+}
+
+func TestValidateRejectsInteractivePlannerMaxRequestsPerRoundBelowOne(t *testing.T) {
+	cfg := &Config{
+		RepoPath: t.TempDir(),
+		LLM:      &LLMConfig{APIKeyEnv: "OPENAI_API_KEY"},
+		Analysis: &AnalysisConfig{
+			SharedModuleThreshold: 1,
+			InteractivePlanner: &InteractivePlannerConfig{
+				Enabled:             true,
+				MaxRounds:           1,
+				MaxRequestsPerRound: 0,
+			},
+		},
+		Agent: &AgentConfig{Concurrency: 4},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() error = nil, want validation error")
+	}
+	if !strings.Contains(err.Error(), "Analysis.InteractivePlanner.MaxRequestsPerRound") {
+		t.Fatalf("Validate() error = %v, want MaxRequestsPerRound violation", err)
+	}
+}

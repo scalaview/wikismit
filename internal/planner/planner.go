@@ -7,14 +7,18 @@ import (
 	"time"
 
 	"github.com/scalaview/wikismit/internal/agent"
-	"github.com/scalaview/wikismit/internal/metrics"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/internal/llm"
 	logpkg "github.com/scalaview/wikismit/internal/log"
+	"github.com/scalaview/wikismit/internal/metrics"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
 func RunPlanner(ctx context.Context, idx store.FileIndex, graph store.DepGraph, cfg *configpkg.Config, client llm.Client) (*store.NavPlan, error) {
+	if cfg.Analysis != nil && cfg.Analysis.InteractivePlanner != nil && cfg.Analysis.InteractivePlanner.Enabled {
+		return RunInteractivePlanner(ctx, idx, graph, cfg, client)
+	}
+
 	_ = graph
 
 	plannerLogger := logger
@@ -131,7 +135,7 @@ func buildExplorationContext(result *agent.ExploreResult) string {
 	var sb strings.Builder
 	sb.WriteString("\n\n<project_exploration>\nThe following files/functions were identified as architecturally important:\n")
 	for _, req := range result.Requests {
-		sb.WriteString(fmt.Sprintf("- %s %s: %s\n", req.Type, req.Target, req.Reason))
+		_, _ = fmt.Fprintf(&sb, "- %s %s: %s\n", req.Type, req.Target, req.Reason)
 	}
 	sb.WriteString("</project_exploration>")
 	return sb.String()

@@ -371,6 +371,93 @@ func TestRunPlannerVerboseLoggingUsesVerboseLoggerWithoutTestOverride(t *testing
 	}
 }
 
+func TestRunPlannerUsesLegacySingleShotWhenInteractiveDisabled(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	cfg.Analysis.InteractivePlanner = &configpkg.InteractivePlannerConfig{
+		Enabled:             false,
+		MaxRounds:           4,
+		MaxRequestsPerRound: 5,
+	}
+	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
+
+	got, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPlanner() error = %v", err)
+	}
+	if got == nil || len(got.Modules) != 1 {
+		t.Fatalf("RunPlanner() modules = %#v, want one module", got)
+	}
+	if got.Modules[0].ID != "auth" {
+		t.Fatalf("RunPlanner() module ID = %q, want auth", got.Modules[0].ID)
+	}
+	if client.CallCount() != 1 {
+		t.Fatalf("MockClient.CallCount() = %d, want 1", client.CallCount())
+	}
+}
+
+func TestRunPlannerUsesInteractiveFlowWhenEnabled(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	cfg.Analysis.InteractivePlanner = &configpkg.InteractivePlannerConfig{
+		Enabled:             true,
+		MaxRounds:           4,
+		MaxRequestsPerRound: 5,
+	}
+
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(
+		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
+		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+	)
+
+	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunPlanner() error = %v", err)
+	}
+	if got == nil || len(got.Modules) != 1 {
+		t.Fatalf("RunPlanner() modules = %#v, want one module", got)
+	}
+	if got.Modules[0].ID != "svc" {
+		t.Fatalf("RunPlanner() module ID = %q, want svc", got.Modules[0].ID)
+	}
+	if client.CallCount() != 2 {
+		t.Fatalf("MockClient.CallCount() = %d, want 2", client.CallCount())
+	}
+}
+
+func TestRunPlannerPrefersInteractiveFlowOverExploreWhenBothEnabled(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	cfg.Analysis.Explore = &configpkg.ExploreConfig{Enabled: true}
+	cfg.Analysis.InteractivePlanner = &configpkg.InteractivePlannerConfig{
+		Enabled:             true,
+		MaxRounds:           4,
+		MaxRequestsPerRound: 5,
+	}
+
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(
+		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
+		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+	)
+
+	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunPlanner() error = %v", err)
+	}
+	if got == nil || len(got.Modules) != 1 {
+		t.Fatalf("RunPlanner() modules = %#v, want one module", got)
+	}
+	if got.Modules[0].ID != "svc" {
+		t.Fatalf("RunPlanner() module ID = %q, want svc", got.Modules[0].ID)
+	}
+	if client.CallCount() != 2 {
+		t.Fatalf("MockClient.CallCount() = %d, want 2", client.CallCount())
+	}
+}
+
 func captureStderrOutput(t *testing.T, fn func()) string {
 	t.Helper()
 
