@@ -92,6 +92,29 @@ func TestBuildPlannerPromptIncludesExplicitOwnerRules(t *testing.T) {
 	}
 }
 
+func TestBuildPlannerPromptIncludesNavigationSchema(t *testing.T) {
+	skeleton := "// === internal/auth/jwt.go ===\nfunc GenerateToken() string  // internal/auth/jwt.go:10"
+
+	got := buildPlannerPrompt(skeleton, 3)
+
+	for _, want := range []string{
+		"version",
+		"navigation",
+		"sections",
+		"navigation_refs",
+		"generated",
+		"business",
+		"events",
+		"architecture",
+		"modules",
+		"api",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildPlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestRunPlannerSucceedsWithValidJSONResponse(t *testing.T) {
 	cfg := samplePlannerConfig(t)
 	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
@@ -257,6 +280,69 @@ func TestRunPlannerRejectsFilesMissingFromIndex(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found in file index") {
 		t.Fatalf("RunPlanner() error = %v, want missing file index context", err)
+	}
+}
+
+func TestRunPlannerRejectsUnknownNavigationSectionType(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"mystery","title":"Unknown"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["mystery"]}]}`,
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"mystery","title":"Unknown"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["mystery"]}]}`,
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"mystery","title":"Unknown"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["mystery"]}]}`,
+	)
+
+	_, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err == nil {
+		t.Fatal("RunPlanner() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown navigation section type") {
+		t.Fatalf("RunPlanner() error = %v, want unknown navigation section type context", err)
+	}
+}
+
+func TestRunPlannerRejectsNavigationRefsToUnknownSections(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["api"]}]}`,
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["api"]}]}`,
+		`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated"}]},"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent","navigation_refs":["api"]}]}`,
+	)
+
+	_, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err == nil {
+		t.Fatal("RunPlanner() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "unknown navigation ref") {
+		t.Fatalf("RunPlanner() error = %v, want unknown navigation ref context", err)
+	}
+}
+
+func TestRunPlannerAcceptsLegacyModulesOnlyNavPlan(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
+
+	got, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPlanner() error = %v", err)
+	}
+	if got.Navigation != nil {
+		t.Fatalf("RunPlanner() Navigation = %#v, want nil", got.Navigation)
+	}
+	if len(got.Modules) != 1 || got.Modules[0].ID != "auth" {
+		t.Fatalf("RunPlanner() modules = %#v, want one auth module", got.Modules)
+	}
+}
+
+func TestRunPlannerSetsVersionOnSuccessfulPlan(t *testing.T) {
+	cfg := samplePlannerConfig(t)
+	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
+
+	got, err := RunPlanner(context.Background(), samplePlannerIndex(), samplePlannerGraph(), cfg, client)
+	if err != nil {
+		t.Fatalf("RunPlanner() error = %v", err)
+	}
+	if got.Version != plannerNavPlanVersion {
+		t.Fatalf("RunPlanner() Version = %q, want %q", got.Version, plannerNavPlanVersion)
 	}
 }
 
