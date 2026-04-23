@@ -65,3 +65,13 @@ func ReadMetrics(dir string) (MetricsMap, error) {
 	err := readJSON(filepath.Join(dir, "function_metrics.json"), &metrics)
 	return metrics, err
 }
+
+func WriteEventFactIndex(dir string, idx EventFactIndex) error {
+	return writeJSON(filepath.Join(dir, "event_fact_index.json"), idx)
+}
+
+func ReadEventFactIndex(dir string) (EventFactIndex, error) {
+	var idx EventFactIndex
+	err := readJSON(filepath.Join(dir, "event_fact_index.json"), &idx)
+	return idx, err
+}

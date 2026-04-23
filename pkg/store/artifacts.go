@@ -26,6 +26,33 @@ type CallRef struct {
 	ResolvedTarget string        `json:"resolved_target,omitempty"`
 }
 
+type EventFact struct {
+	EventName  string `json:"event_name"`
+	HandlerRef string `json:"handler_ref,omitempty"`
+	FuncID     string `json:"func_id"`
+	Line       int    `json:"line"`
+	Evidence   string `json:"evidence,omitempty"`
+}
+
+type EventFacts struct {
+	Publishes []*EventFact `json:"publishes,omitempty"`
+	Handles   []*EventFact `json:"handles,omitempty"`
+	Registers []*EventFact `json:"registers,omitempty"`
+}
+
+type EventHints struct {
+	LikelyPublishes []*EventFact `json:"likely_publishes,omitempty"`
+	LikelyHandles   []*EventFact `json:"likely_handles,omitempty"`
+	LikelyRegisters []*EventFact `json:"likely_registers,omitempty"`
+}
+
+type EventEntry struct {
+	EventName     string       `json:"event_name"`
+	Publishers    []*EventFact `json:"publishers,omitempty"`
+	Handlers      []*EventFact `json:"handlers,omitempty"`
+	Registrations []*EventFact `json:"registrations,omitempty"`
+}
+
 type VarDecl struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
@@ -55,6 +82,8 @@ type FunctionDecl struct {
 	Calls        []*CallRef   `json:"calls,omitempty"`
 	CalledBy     []*CallRef   `json:"called_by,omitempty"`
 	VarDefs      []*VarDecl   `json:"var_defs,omitempty"`
+	EventFacts   *EventFacts  `json:"event_facts,omitempty"`
+	EventHints   *EventHints  `json:"event_hints,omitempty"`
 }
 
 type TypeDecl struct {
@@ -133,6 +162,12 @@ type FunctionMetrics struct {
 }
 
 type MetricsMap map[string]*FunctionMetrics
+
+type EventFactIndex struct {
+	Version     string       `json:"version"`
+	GeneratedAt time.Time    `json:"generated_at"`
+	Events      []*EventEntry `json:"events"`
+}
 
 func FuncID(fn *FunctionDecl) string {
 	if fn == nil {
