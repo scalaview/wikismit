@@ -280,3 +280,60 @@ agent:
 		t.Fatalf("ImportanceThreshold = %.2f, want 0.50", cfg.Analysis.ImportanceThreshold)
 	}
 }
+
+func TestLoadConfigAppliesEventFlowDefaults(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+agent:
+  concurrency: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.EventFlow == nil {
+		t.Fatal("EventFlow = nil, want defaults")
+	}
+	if cfg.EventFlow.Enabled {
+		t.Fatal("EventFlow.Enabled = true, want false by default")
+	}
+	if cfg.EventFlow.IncludeHintsInRound1 {
+		t.Fatal("EventFlow.IncludeHintsInRound1 = true, want false by default")
+	}
+}
+
+func TestLoadConfigReadsExplicitEventFlowSettings(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("OPENAI_API_KEY", "secret-token")
+
+	configPath := writeTestConfig(t, t.TempDir(), `
+repo_path: "`+repoDir+`"
+llm:
+  api_key_env: "OPENAI_API_KEY"
+event_flow:
+  enabled: true
+  include_hints_in_round1: true
+agent:
+  concurrency: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.EventFlow == nil {
+		t.Fatal("EventFlow = nil, want explicit config")
+	}
+	if !cfg.EventFlow.Enabled {
+		t.Fatal("EventFlow.Enabled = false, want true")
+	}
+	if !cfg.EventFlow.IncludeHintsInRound1 {
+		t.Fatal("EventFlow.IncludeHintsInRound1 = false, want true")
+	}
+}
