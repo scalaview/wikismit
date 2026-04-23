@@ -19,7 +19,13 @@ type Config struct {
 	Agent        *AgentConfig    `yaml:"agent"`
 	Cache        *CacheConfig    `yaml:"cache"`
 	Site         *SiteConfig     `yaml:"site"`
+	EventFlow    *EventFlowConfig `yaml:"event_flow"`
 	Language     string          `yaml:"language"`
+}
+
+type EventFlowConfig struct {
+	Enabled              bool `yaml:"enabled"`
+	IncludeHintsInRound1 bool `yaml:"include_hints_in_round1"`
 }
 
 type LLMConfig struct {
@@ -120,6 +126,10 @@ func defaultConfig() Config {
 			Enabled: true,
 			Dir:     "./artifacts/cache",
 		},
+		EventFlow: &EventFlowConfig{
+			Enabled:              false,
+			IncludeHintsInRound1: false,
+		},
 		Language: "English",
 	}
 }
@@ -189,6 +199,9 @@ func applyDefaults(cfg *Config) {
 
 	if cfg.Cache.Dir == "" {
 		cfg.Cache.Dir = defaults.Cache.Dir
+	}
+	if cfg.EventFlow == nil {
+		cfg.EventFlow = defaults.EventFlow
 	}
 
 	if cfg.Language == "" {

@@ -13,6 +13,7 @@ type SkeletonFilterConfig struct {
 	MinFuncLines  int     // minimum lines of code (default: 5)
 	MinCalledBy   int     // minimum CalledBy count (default: 1)
 	MinImportance float64 // minimum ImportanceScore (default: 0.05)
+	IncludeEventHints bool // include likely event hints in Round 1 skeleton
 }
 
 // DefaultSkeletonFilterConfig returns the recommended filter configuration.
@@ -21,6 +22,7 @@ func DefaultSkeletonFilterConfig() SkeletonFilterConfig {
 		MinFuncLines:  5,
 		MinCalledBy:   1,
 		MinImportance: 0.05,
+		IncludeEventHints: false,
 	}
 }
 
@@ -179,7 +181,40 @@ func buildExploreFileBlock(file string, entry *store.FileEntry, filter *metrics.
 		sig := formatShortSignature(fn.Signature)
 		fnLine := fmt.Sprintf("%s%s//%d", marker, sig, lineCount)
 		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fnLine)
+		for _, landmark := range eventLandmarkLines(fn, cfg.IncludeEventHints) {
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, landmark)
+		}
 	}
 
 	return fileLines, fileChars
+}
+
+func eventLandmarkLines(fn *store.FunctionDecl, includeHints bool) []string {
+	if fn == nil {
+		return nil
+	}
+	var lines []string
+	appendFacts := func(prefix string, facts []*store.EventFact) {
+		for _, fact := range facts {
+			if fact == nil || strings.TrimSpace(fact.EventName) == "" {
+				continue
+			}
+			line := fmt.Sprintf("    %s %s", prefix, strings.TrimSpace(fact.EventName))
+			if fact.HandlerRef != "" {
+				line += fmt.Sprintf(" -> %s", fact.HandlerRef)
+			}
+			lines = append(lines, line)
+		}
+	}
+	if fn.EventFacts != nil {
+		appendFacts("event publish:", fn.EventFacts.Publishes)
+		appendFacts("event handle:", fn.EventFacts.Handles)
+		appendFacts("event register:", fn.EventFacts.Registers)
+	}
+	if includeHints && fn.EventHints != nil {
+		appendFacts("event hint publish:", fn.EventHints.LikelyPublishes)
+		appendFacts("event hint handle:", fn.EventHints.LikelyHandles)
+		appendFacts("event hint register:", fn.EventHints.LikelyRegisters)
+	}
+	return lines
 }

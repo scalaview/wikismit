@@ -119,3 +119,70 @@ func TestBuildExploreSkeleton_NilFilter(t *testing.T) {
 		t.Error("nil filter should use BuildPlannerSkeleton format")
 	}
 }
+
+func TestBuildExploreSkeletonIncludesConfirmedEventLandmarksOnlyByDefault(t *testing.T) {
+	idx := store.FileIndex{
+		"handler.go": &store.FileEntry{
+			Path: "handler.go",
+			Functions: []*store.FunctionDecl{{
+				Name:      "Handle",
+				Signature: "func Handle(evt Event)",
+				LineStart: 10,
+				LineEnd:   40,
+				Exported:  true,
+				Path:      "handler.go",
+				CalledBy:  []*store.CallRef{{Name: "main"}},
+				EventFacts: &store.EventFacts{
+					Publishes: []*store.EventFact{{EventName: "user.created", Line: 18, Evidence: "bus.Publish(user.created)"}},
+					Handles:   []*store.EventFact{{EventName: "user.updated", Line: 22, Evidence: "switch evt.Name"}},
+				},
+				EventHints: &store.EventHints{
+					LikelyPublishes: []*store.EventFact{{EventName: "hint.only", Line: 25, Evidence: "comment hint"}},
+				},
+			}},
+		},
+	}
+	metricsMap := store.MetricsMap{
+		"handler.go#Handle": {FuncID: "handler.go#Handle", LinesOfCode: 30, ImportanceScore: 0.8},
+	}
+	filter := metrics.NewImportanceFilter(metricsMap, 0)
+
+	result := BuildExploreSkeleton(idx, 5000, filter, DefaultSkeletonFilterConfig())
+	if !strings.Contains(result, "user.created") || !strings.Contains(result, "user.updated") {
+		t.Fatalf("expected confirmed event landmarks in skeleton:\n%s", result)
+	}
+	if strings.Contains(result, "hint.only") {
+		t.Fatalf("expected hints to be excluded by default:\n%s", result)
+	}
+}
+
+func TestBuildExploreSkeletonIncludesEventHintsWhenEnabled(t *testing.T) {
+	idx := store.FileIndex{
+		"handler.go": &store.FileEntry{
+			Path: "handler.go",
+			Functions: []*store.FunctionDecl{{
+				Name:      "Handle",
+				Signature: "func Handle(evt Event)",
+				LineStart: 10,
+				LineEnd:   40,
+				Exported:  true,
+				Path:      "handler.go",
+				CalledBy:  []*store.CallRef{{Name: "main"}},
+				EventHints: &store.EventHints{
+					LikelyPublishes: []*store.EventFact{{EventName: "hint.only", Line: 25, Evidence: "comment hint"}},
+				},
+			}},
+		},
+	}
+	metricsMap := store.MetricsMap{
+		"handler.go#Handle": {FuncID: "handler.go#Handle", LinesOfCode: 30, ImportanceScore: 0.8},
+	}
+	filter := metrics.NewImportanceFilter(metricsMap, 0)
+	cfg := DefaultSkeletonFilterConfig()
+	cfg.IncludeEventHints = true
+
+	result := BuildExploreSkeleton(idx, 5000, filter, cfg)
+	if !strings.Contains(result, "hint.only") {
+		t.Fatalf("expected hints when enabled:\n%s", result)
+	}
+}

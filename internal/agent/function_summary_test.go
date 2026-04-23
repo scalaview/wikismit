@@ -513,6 +513,61 @@ func TestFunctionSummaryBuildPromptDeduplicatesRepeatedInternalCallees(t *testin
 	}
 }
 
+func TestFunctionSummaryBuildPromptUsesEventFlowTemplatesWhenEnabled(t *testing.T) {
+	const path = "internal/auth/service.go"
+	const helperPath = "internal/auth/session.go"
+
+	helperSummary := helperPath + "#persistSession\nSummary: Persists session state before returning any storage error."
+	caller := functionSummaryTestMethod(
+		path,
+		"sessionService",
+		"HandleRequest",
+		"func (s sessionService) HandleRequest() error {\n\treturn persistSession()\n}",
+		"",
+		functionSummaryTestInternalCall(helperPath, "persistSession"),
+	)
+	helper := functionSummaryTestFunction(helperPath, "persistSession", "func persistSession() error {\n\treturn nil\n}", helperSummary)
+
+	state := newRunContext(store.FileIndex{
+		path: {
+			Path:      path,
+			Functions: []*store.FunctionDecl{caller},
+		},
+		helperPath: {
+			Path:      helperPath,
+			Functions: []*store.FunctionDecl{helper},
+		},
+	})
+	agent := NewFunctionSummaryAgent(llm.NewMockClient(), &FunctionSummaryConfig{
+		Model:           "test-model",
+		MaxTokens:       512,
+		DependencyDepth: 2,
+		EnableEventFlow: true,
+	})
+
+	req, err := agent.buildPrompt(state, &batch{keys: []*fnKey{{path: path, receiver: "sessionService", name: "HandleRequest"}}})
+	if err != nil {
+		t.Fatalf("buildPrompt() error = %v, want nil", err)
+	}
+
+	for _, want := range []string{
+		"ID: sessionService#HandleRequest",
+		"Receiver: sessionService",
+		"Name: HandleRequest",
+		"Signature:",
+		"event flow",
+		`"event_facts"`,
+		`"event_hints"`,
+	} {
+		if !strings.Contains(req.SystemMsg+"\n"+req.UserMsg, want) {
+			t.Fatalf("event-flow prompt missing %q:\nSYSTEM:\n%s\nUSER:\n%s", want, req.SystemMsg, req.UserMsg)
+		}
+	}
+	if !strings.Contains(req.UserMsg, helperSummary) {
+		t.Fatalf("event-flow prompt missing callee summary:\n%s", req.UserMsg)
+	}
+}
+
 func TestFunctionSummaryBuildPromptTemplateSmoke(t *testing.T) {
 	data := &promptpkg.FunctionUserPromptData{
 		Functions: []promptpkg.FunctionStruct{{
@@ -569,6 +624,98 @@ func TestFunctionSummaryParseResponseAcceptsBareJSONAndFencedJSON(t *testing.T) 
 				t.Fatalf("parseResponse() = %#v, want %#v", got, want)
 			}
 		})
+	}
+}
+
+func TestFunctionSummaryRunAppliesEventFactsAndHintsFromResponse(t *testing.T) {
+	const path = "internal/auth/service.go"
+	const summary = path + "#HandleRequest\nSummary: Handles a request and emits a confirmed event."
+
+	idx := store.FileIndex{
+		path: {
+			Path: path,
+			Functions: []*store.FunctionDecl{
+				functionSummaryTestFunction(path, "HandleRequest", "func HandleRequest() error {\n\treturn nil\n}", ""),
+			},
+		},
+	}
+	client := llm.NewMockClient(functionSummaryTestResponse(&functionSummaryResult{
+		ID:      "HandleRequest",
+		Path:    path,
+		Summary: summary,
+		EventFacts: &store.EventFacts{Publishes: []*store.EventFact{{
+			EventName: "user.created",
+			Line:      12,
+			Evidence:  "bus.Publish(UserCreated)",
+		}}},
+		EventHints: &store.EventHints{LikelyHandles: []*store.EventFact{{
+			EventName:  "user.created",
+			HandlerRef: "AuditHandler",
+			Line:       18,
+			Evidence:   "comment hint",
+		}}},
+	}))
+	agent := NewFunctionSummaryAgent(client, &FunctionSummaryConfig{
+		Model:           "test-model",
+		MaxTokens:       512,
+		ContextBudget:   1024,
+		EnableEventFlow: true,
+	})
+
+	if err := agent.Run(context.Background(), idx, nil); err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+
+	fn := idx[path].Functions[0]
+	if fn.Summary != summary {
+		t.Fatalf("Summary = %q, want %q", fn.Summary, summary)
+	}
+	if fn.EventFacts == nil || len(fn.EventFacts.Publishes) != 1 {
+		t.Fatalf("EventFacts.Publishes = %#v, want one confirmed fact", fn.EventFacts)
+	}
+	if got := fn.EventFacts.Publishes[0].EventName; got != "user.created" {
+		t.Fatalf("EventFacts.Publishes[0].EventName = %q, want user.created", got)
+	}
+	if fn.EventHints == nil || len(fn.EventHints.LikelyHandles) != 1 {
+		t.Fatalf("EventHints.LikelyHandles = %#v, want one likely hint", fn.EventHints)
+	}
+	if got := fn.EventHints.LikelyHandles[0].HandlerRef; got != "AuditHandler" {
+		t.Fatalf("EventHints.LikelyHandles[0].HandlerRef = %q, want AuditHandler", got)
+	}
+}
+
+func TestFunctionSummaryRunRequestsLowImportanceFunctionWhenEventFlowEnabled(t *testing.T) {
+	const path = "internal/auth/service.go"
+	const summary = path + "#EmitUserCreated\nSummary: Emits the user created event."
+
+	idx := store.FileIndex{
+		path: {
+			Path: path,
+			Functions: []*store.FunctionDecl{
+				functionSummaryTestFunction(path, "EmitUserCreated", "func EmitUserCreated() error {\n\treturn nil\n}", ""),
+			},
+		},
+	}
+	client := llm.NewMockClient(functionSummaryTestResponse(&functionSummaryResult{ID: "EmitUserCreated", Path: path, Summary: summary}))
+	agent := NewFunctionSummaryAgent(client, &FunctionSummaryConfig{
+		Model:               "test-model",
+		MaxTokens:           512,
+		ContextBudget:       1024,
+		ImportanceThreshold: 0.9,
+		EnableEventFlow:     true,
+	})
+	metrics := store.MetricsMap{
+		path + "#EmitUserCreated": {FuncID: path + "#EmitUserCreated", ImportanceScore: 0.01},
+	}
+
+	if err := agent.Run(context.Background(), idx, metrics); err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if got := client.CallCount(); got != 1 {
+		t.Fatalf("CallCount() = %d, want 1", got)
+	}
+	if got := idx[path].Functions[0].Summary; got != summary {
+		t.Fatalf("Summary = %q, want %q", got, summary)
 	}
 }
 

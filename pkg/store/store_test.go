@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,6 +21,51 @@ func sampleFileIndex() FileIndex {
 				LineStart: 10,
 				LineEnd:   20,
 				Exported:  true,
+				Path:      "internal/auth/jwt.go",
+				EventFacts: &EventFacts{
+					Publishes: []*EventFact{{
+						EventName: "token.generated",
+						FuncID:    "internal/auth/jwt.go#GenerateToken",
+						Line:      14,
+						Evidence:  "emit(token.generated)",
+					}},
+					Handles: []*EventFact{{
+						EventName:  "token.generated",
+						HandlerRef: "internal/auth/jwt.go#GenerateToken",
+						FuncID:     "internal/auth/jwt.go#GenerateToken",
+						Line:       15,
+						Evidence:   "case token.generated:",
+					}},
+					Registers: []*EventFact{{
+						EventName:  "token.generated",
+						HandlerRef: "internal/auth/jwt.go#GenerateToken",
+						FuncID:     "internal/auth/jwt.go#GenerateToken",
+						Line:       15,
+						Evidence:   "bus.Register(token.generated, GenerateToken)",
+					}},
+				},
+				EventHints: &EventHints{
+					LikelyPublishes: []*EventFact{{
+						EventName: "token.refreshed",
+						FuncID:    "internal/auth/jwt.go#GenerateToken",
+						Line:      17,
+						Evidence:  "refresh path emits similar event",
+					}},
+					LikelyHandles: []*EventFact{{
+						EventName:  "audit.token",
+						HandlerRef: "internal/auth/jwt.go#GenerateToken",
+						FuncID:     "internal/auth/jwt.go#GenerateToken",
+						Line:       18,
+						Evidence:   "comment mentions audit sink",
+					}},
+					LikelyRegisters: []*EventFact{{
+						EventName:  "audit.token",
+						HandlerRef: "internal/auth/jwt.go#GenerateToken",
+						FuncID:     "internal/auth/jwt.go#GenerateToken",
+						Line:       19,
+						Evidence:   "TODO register audit handler",
+					}},
+				},
 			}},
 			Types: []*TypeDecl{{
 				Name:      "Claims",
@@ -29,6 +75,36 @@ func sampleFileIndex() FileIndex {
 			}},
 			Imports: []*Import{{Path: "internal/models", Internal: true}},
 		},
+	}
+}
+
+func sampleEventFactIndex() EventFactIndex {
+	return EventFactIndex{
+		Version:     "epic14/v1",
+		GeneratedAt: time.Unix(1710004321, 0).UTC(),
+		Events: []*EventEntry{{
+			EventName: "token.generated",
+			Publishers: []*EventFact{{
+				EventName: "token.generated",
+				FuncID:    "internal/auth/jwt.go#GenerateToken",
+				Line:      14,
+				Evidence:  "emit(token.generated)",
+			}},
+			Handlers: []*EventFact{{
+				EventName:  "token.generated",
+				HandlerRef: "internal/auth/jwt.go#GenerateToken",
+				FuncID:     "internal/auth/jwt.go#GenerateToken",
+				Line:       15,
+				Evidence:   "case token.generated:",
+			}},
+			Registrations: []*EventFact{{
+				EventName:  "token.generated",
+				HandlerRef: "internal/auth/jwt.go#GenerateToken",
+				FuncID:     "internal/auth/jwt.go#GenerateToken",
+				Line:       15,
+				Evidence:   "bus.Register(token.generated, GenerateToken)",
+			}},
+		}},
 	}
 }
 
@@ -93,6 +169,155 @@ func TestWriteAndReadFileIndexRoundTrip(t *testing.T) {
 	}
 	if got["internal/auth/jwt.go"].ContentHash != want["internal/auth/jwt.go"].ContentHash {
 		t.Fatalf("round trip mismatch: got %+v want %+v", got, want)
+	}
+	if len(got["internal/auth/jwt.go"].Functions) != 1 {
+		t.Fatalf("len(Functions) = %d, want 1", len(got["internal/auth/jwt.go"].Functions))
+	}
+	if got["internal/auth/jwt.go"].Functions[0].EventFacts == nil {
+		t.Fatal("EventFacts = nil, want nested facts")
+	}
+	if len(got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes) != 1 {
+		t.Fatalf("len(EventFacts.Publishes) = %d, want 1", len(got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes))
+	}
+	if got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].EventName != want["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].EventName {
+		t.Fatalf("EventFacts.Publishes[0].EventName = %q, want %q", got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].EventName, want["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].EventName)
+	}
+	if got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].FuncID != want["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].FuncID {
+		t.Fatalf("EventFacts.Publishes[0].FuncID = %q, want %q", got["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].FuncID, want["internal/auth/jwt.go"].Functions[0].EventFacts.Publishes[0].FuncID)
+	}
+	if got["internal/auth/jwt.go"].Functions[0].EventHints == nil {
+		t.Fatal("EventHints = nil, want nested hints")
+	}
+	if len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyPublishes) != 1 {
+		t.Fatalf("len(EventHints.LikelyPublishes) = %d, want 1", len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyPublishes))
+	}
+	if len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles) != 1 {
+		t.Fatalf("len(EventHints.LikelyHandles) = %d, want 1", len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles))
+	}
+	if got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles[0].HandlerRef != want["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles[0].HandlerRef {
+		t.Fatalf("EventHints.LikelyHandles[0].HandlerRef = %q, want %q", got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles[0].HandlerRef, want["internal/auth/jwt.go"].Functions[0].EventHints.LikelyHandles[0].HandlerRef)
+	}
+	if len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyRegisters) != 1 {
+		t.Fatalf("len(EventHints.LikelyRegisters) = %d, want 1", len(got["internal/auth/jwt.go"].Functions[0].EventHints.LikelyRegisters))
+	}
+}
+
+func TestWriteAndReadEventFactIndexRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleEventFactIndex()
+
+	if err := WriteEventFactIndex(dir, want); err != nil {
+		t.Fatalf("WriteEventFactIndex() error = %v", err)
+	}
+	got, err := ReadEventFactIndex(dir)
+	if err != nil {
+		t.Fatalf("ReadEventFactIndex() error = %v", err)
+	}
+	if len(got.Events) != len(want.Events) {
+		t.Fatalf("len(Events) = %d, want %d", len(got.Events), len(want.Events))
+	}
+	if got.Version != want.Version {
+		t.Fatalf("Version = %q, want %q", got.Version, want.Version)
+	}
+	if !got.GeneratedAt.Equal(want.GeneratedAt) {
+		t.Fatalf("GeneratedAt = %v, want %v", got.GeneratedAt, want.GeneratedAt)
+	}
+	if got.Events[0].EventName != want.Events[0].EventName {
+		t.Fatalf("Events[0].EventName = %q, want %q", got.Events[0].EventName, want.Events[0].EventName)
+	}
+	if got.Events[0].Publishers[0].FuncID != want.Events[0].Publishers[0].FuncID {
+		t.Fatalf("Events[0].Publishers[0].FuncID = %q, want %q", got.Events[0].Publishers[0].FuncID, want.Events[0].Publishers[0].FuncID)
+	}
+	if got.Events[0].Handlers[0].FuncID != want.Events[0].Handlers[0].FuncID {
+		t.Fatalf("Events[0].Handlers[0].FuncID = %q, want %q", got.Events[0].Handlers[0].FuncID, want.Events[0].Handlers[0].FuncID)
+	}
+	if got.Events[0].Registrations[0].FuncID != want.Events[0].Registrations[0].FuncID {
+		t.Fatalf("Events[0].Registrations[0].FuncID = %q, want %q", got.Events[0].Registrations[0].FuncID, want.Events[0].Registrations[0].FuncID)
+	}
+}
+
+func TestWriteEventFactIndexUsesSensibleJSONShape(t *testing.T) {
+	dir := t.TempDir()
+	want := sampleEventFactIndex()
+
+	if err := WriteEventFactIndex(dir, want); err != nil {
+		t.Fatalf("WriteEventFactIndex() error = %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "event_fact_index.json"))
+	if err != nil {
+		t.Fatalf("os.ReadFile() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	events, ok := got["events"].([]any)
+	if !ok {
+		t.Fatalf("events type = %T, want []any", got["events"])
+	}
+	if got["version"] != "epic14/v1" {
+		t.Fatalf("version = %#v, want %q", got["version"], "epic14/v1")
+	}
+	if generatedAt, ok := got["generated_at"].(string); !ok || !strings.HasPrefix(generatedAt, "2024-03-09T17:12:01Z") {
+		t.Fatalf("generated_at = %#v, want RFC3339 timestamp", got["generated_at"])
+	}
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1", len(events))
+	}
+	entry0, ok := events[0].(map[string]any)
+	if !ok {
+		t.Fatalf("events[0] type = %T, want map[string]any", events[0])
+	}
+	if entry0["event_name"] != "token.generated" {
+		t.Fatalf("event_name = %#v, want %q", entry0["event_name"], "token.generated")
+	}
+	if _, exists := entry0["likely_handles"]; exists {
+		t.Fatal("likely_handles present in aggregate JSON, want absent")
+	}
+	if _, exists := entry0["likely_publishes"]; exists {
+		t.Fatal("likely_publishes present in aggregate JSON, want absent")
+	}
+	if _, exists := entry0["likely_registers"]; exists {
+		t.Fatal("likely_registers present in aggregate JSON, want absent")
+	}
+	publishers, ok := entry0["publishers"].([]any)
+	if !ok {
+		t.Fatalf("publishers type = %T, want []any", entry0["publishers"])
+	}
+	publisher0, ok := publishers[0].(map[string]any)
+	if !ok {
+		t.Fatalf("publishers[0] type = %T, want map[string]any", publishers[0])
+	}
+	if publisher0["func_id"] != "internal/auth/jwt.go#GenerateToken" {
+		t.Fatalf("publisher func_id = %#v, want %q", publisher0["func_id"], "internal/auth/jwt.go#GenerateToken")
+	}
+	handlers, ok := entry0["handlers"].([]any)
+	if !ok {
+		t.Fatalf("handlers type = %T, want []any", entry0["handlers"])
+	}
+	handler0, ok := handlers[0].(map[string]any)
+	if !ok {
+		t.Fatalf("handlers[0] type = %T, want map[string]any", handlers[0])
+	}
+	if handler0["func_id"] != "internal/auth/jwt.go#GenerateToken" {
+		t.Fatalf("handler func_id = %#v, want %q", handler0["func_id"], "internal/auth/jwt.go#GenerateToken")
+	}
+	registrations, ok := entry0["registrations"].([]any)
+	if !ok {
+		t.Fatalf("registrations type = %T, want []any", entry0["registrations"])
+	}
+	registration0, ok := registrations[0].(map[string]any)
+	if !ok {
+		t.Fatalf("registrations[0] type = %T, want map[string]any", registrations[0])
+	}
+	if registration0["func_id"] != "internal/auth/jwt.go#GenerateToken" {
+		t.Fatalf("registration func_id = %#v, want %q", registration0["func_id"], "internal/auth/jwt.go#GenerateToken")
+	}
+	if registration0["handler_ref"] != "internal/auth/jwt.go#GenerateToken" {
+		t.Fatalf("handler_ref = %#v, want %q", registration0["handler_ref"], "internal/auth/jwt.go#GenerateToken")
 	}
 }
 
