@@ -195,6 +195,127 @@ func TestGenerateIndexPageIncludesSharedUsedByColumn(t *testing.T) {
 	}
 }
 
+func TestRunComposerWritesGeneratedNavigationPagesWhenSectionsPresent(t *testing.T) {
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	moduleDocsDir := filepath.Join(artifactsDir, "module_docs")
+	if err := os.MkdirAll(moduleDocsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(moduleDocsDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDocsDir, "auth.md"), []byte("# Auth\n\n## Overview\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	cfg := generateConfigForTest(t)
+	cfg.ArtifactsDir = artifactsDir
+	cfg.OutputDir = outputDir
+	plan := &store.NavPlan{
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Title:       "Generated Docs",
+			Type:        "generated",
+			Description: "Important generated entry points.",
+			Items: []*store.NavigationItem{{
+				Title:      "Auth overview",
+				Path:       "modules/auth.md",
+				EntryPoint: "internal/auth/jwt.go#GenerateToken",
+				Events:     []string{"token.generated"},
+				Highlights: []string{"Issues JWTs"},
+			}},
+		}}},
+						Modules: []*store.Module{{ID: "auth", Shared: false}},
+	}
+
+	if err := RunComposer(cfg, plan, store.FileIndex{}, store.DepGraph{}); err != nil {
+		t.Fatalf("RunComposer() error = %v", err)
+	}
+
+	generatedPath := filepath.Join(outputDir, "generated", "generated.md")
+	data, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error = %v", generatedPath, err)
+	}
+	rendered := string(data)
+	if !strings.Contains(rendered, "# Generated Docs") {
+		t.Fatalf("generated page missing title:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "[Auth overview](../modules/auth.md)") {
+		t.Fatalf("generated page missing relative module link:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "internal/auth/jwt.go#GenerateToken") {
+		t.Fatalf("generated page missing entry point:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "token.generated") {
+		t.Fatalf("generated page missing events:\n%s", rendered)
+	}
+
+	reportPath := filepath.Join(artifactsDir, "validation_report.json")
+	reportData, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("ReadFile(validation_report.json) error = %v", err)
+	}
+	if strings.Contains(string(reportData), "modules/auth.md") {
+		t.Fatalf("validation report unexpectedly recorded generated link as broken:\n%s", string(reportData))
+	}
+}
+
+func TestGenerateIndexPageIncludesNavigationSectionsBeforeModules(t *testing.T) {
+	plan := &store.NavPlan{
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{{
+			Title: "Generated Docs",
+			Type:  "generated",
+		}}},
+		Modules: []*store.Module{{ID: "auth", Shared: false}},
+	}
+
+	result := GenerateIndexPage(plan, store.DepGraph{})
+
+	sectionIndex := strings.Index(result, "## Navigation Sections")
+	sectionLinkIndex := strings.Index(result, "- [Generated Docs](generated/generated.md)")
+	moduleTableIndex := strings.Index(result, "| Module | Type | Used By |")
+	moduleRowIndex := strings.Index(result, "| auth | module | - |")
+	if sectionIndex == -1 || sectionLinkIndex == -1 || moduleTableIndex == -1 || moduleRowIndex == -1 {
+		t.Fatalf("index page missing expected navigation/module content:\n%s", result)
+	}
+	if !(sectionIndex < sectionLinkIndex && sectionLinkIndex < moduleTableIndex && moduleTableIndex < moduleRowIndex) {
+		t.Fatalf("navigation sections were not listed before module table:\n%s", result)
+	}
+}
+
+func TestRunComposerStillWorksWithModulesOnlyNavPlan(t *testing.T) {
+	artifactsDir := t.TempDir()
+	outputDir := t.TempDir()
+	moduleDocsDir := filepath.Join(artifactsDir, "module_docs")
+	if err := os.MkdirAll(moduleDocsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(moduleDocsDir) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDocsDir, "auth.md"), []byte("# Auth\n\n## Overview\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(auth.md) error = %v", err)
+	}
+
+	cfg := generateConfigForTest(t)
+	cfg.ArtifactsDir = artifactsDir
+	cfg.OutputDir = outputDir
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
+
+	if err := RunComposer(cfg, plan, store.FileIndex{}, store.DepGraph{}); err != nil {
+		t.Fatalf("RunComposer() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(outputDir, "modules", "auth.md")); err != nil {
+		t.Fatalf("modules/auth.md missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "generated")); !os.IsNotExist(err) {
+		t.Fatalf("generated directory should be absent for modules-only plan, stat err = %v", err)
+	}
+	indexData, err := os.ReadFile(filepath.Join(outputDir, "index.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(index.md) error = %v", err)
+	}
+	if strings.Contains(string(indexData), "## Navigation Sections") {
+		t.Fatalf("index page unexpectedly included navigation sections for legacy plan:\n%s", string(indexData))
+	}
+}
+
 func TestRunComposerWritesDocsIndexAndValidationReport(t *testing.T) {
 	artifactsDir := t.TempDir()
 	outputDir := t.TempDir()
