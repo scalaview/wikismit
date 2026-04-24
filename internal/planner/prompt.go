@@ -107,6 +107,9 @@ Available request types:
 Rules:
 - If you still need evidence, return JSON with: {"round":N,"understanding":"...","requests":[...]}
 - If you are ready to finish, return JSON with: {"round":N,"modules":[...],"navigation":{"sections":[...]}}
+- Use read_file only with file paths listed in FILE headers.
+- Use read_function and call_chain only with exact refs listed under QUERYABLE_FUNCTIONS.
+- Names under TYPES, INTERNAL_IMPORTS, and EVENT_LANDMARKS are informational only and are not valid function refs.
 - Terminal payload must use top-level ` + "`modules`" + ` and optional top-level ` + "`navigation`" + `.
 - Terminal ` + "`navigation`" + ` maps to the ` + "`store.Navigation`" + ` subtree only.
 - Terminal ` + "`navigation`" + ` must not wrap another ` + "`modules`" + ` object and must not be presented as a full NavPlan.

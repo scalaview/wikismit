@@ -180,7 +180,7 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 
 	contextState := &PlannerRoundContext{
 		Round:              2,
-		Skeleton:           "// svc/handler.go\nfunc HandleRequest() error",
+		Skeleton:           "FILE: svc/handler.go\nQUERYABLE_FUNCTIONS\n  svc/handler.go#HandleRequest",
 		ExplorationContext: "Need call graph evidence before assigning modules",
 		PreviousResponses: []*PlannerResponseEnvelope{{
 			Type:   "read_file",
@@ -201,6 +201,23 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 		"owner",
 		"Previous responses:",
 		"svc/handler.go",
+		"QUERYABLE_FUNCTIONS",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptStatesOnlyQueryableFunctionsAreCallable(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "FILE: svc/service.go\nQUERYABLE_FUNCTIONS\n  svc/service.go#HandleRequest\nTYPES\n  Service"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, want := range []string{
+		"Use read_file only with file paths listed in FILE headers.",
+		"Use read_function and call_chain only with exact refs listed under QUERYABLE_FUNCTIONS.",
+		"Names under TYPES, INTERNAL_IMPORTS, and EVENT_LANDMARKS are informational only and are not valid function refs.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
@@ -209,7 +226,7 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 }
 
 func TestBuildInteractivePlannerPromptUsesReceiverAwareMethodExamples(t *testing.T) {
-	contextState := &PlannerRoundContext{Round: 1, Skeleton: "// svc/service.go"}
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "FILE: svc/service.go"}
 
 	got := buildInteractivePlannerPrompt(contextState, 3)
 
@@ -224,7 +241,7 @@ func TestBuildInteractivePlannerPromptUsesReceiverAwareMethodExamples(t *testing
 }
 
 func TestBuildInteractivePlannerPromptUsesTopLevelModulesAndNavigationSchema(t *testing.T) {
-	contextState := &PlannerRoundContext{Round: 2, Skeleton: "// svc/handler.go"}
+	contextState := &PlannerRoundContext{Round: 2, Skeleton: "FILE: svc/handler.go"}
 
 	got := buildInteractivePlannerPrompt(contextState, 3)
 
@@ -241,7 +258,7 @@ func TestBuildInteractivePlannerPromptUsesTopLevelModulesAndNavigationSchema(t *
 }
 
 func TestBuildInteractivePlannerPromptDoesNotNestModulesUnderNavigation(t *testing.T) {
-	contextState := &PlannerRoundContext{Round: 2, Skeleton: "// svc/handler.go"}
+	contextState := &PlannerRoundContext{Round: 2, Skeleton: "FILE: svc/handler.go"}
 
 	got := buildInteractivePlannerPrompt(contextState, 3)
 
