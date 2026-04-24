@@ -13,6 +13,7 @@ import (
 
 func TestMain(m *testing.M) {
 	log.SetDefaultLogger(log.New(true))
+	os.Exit(m.Run())
 }
 
 func TestGenerateVitePressConfigBuildsModulesAndSharedSidebarGroups(t *testing.T) {
@@ -34,8 +35,89 @@ func TestGenerateVitePressConfigBuildsModulesAndSharedSidebarGroups(t *testing.T
 	if !strings.Contains(result, "text: 'Shared'") {
 		t.Fatalf("config missing Shared sidebar group:\n%s", result)
 	}
+	modulesIndex := strings.Index(result, "text: 'Modules'")
+	sharedIndex := strings.Index(result, "text: 'Shared'")
+	if modulesIndex == -1 || sharedIndex == -1 || modulesIndex > sharedIndex {
+		t.Fatalf("config sidebar groups out of order:\n%s", result)
+	}
 	if !strings.Contains(result, "'/modules/auth.md'") || !strings.Contains(result, "'/shared/logger.md'") {
 		t.Fatalf("config missing expected module/shared links:\n%s", result)
+	}
+}
+
+func TestGenerateVitePressConfigIncludesNavigationSectionsBeforeModulesAndShared(t *testing.T) {
+	plan := &store.NavPlan{
+		Navigation: &store.Navigation{Sections: []*store.NavigationSection{
+			{Title: "Generated Docs", Type: "generated"},
+			{Title: "Business Flows", Type: "business"},
+			{Title: "Event Flows", Type: "events"},
+			{Title: "Architecture", Type: "architecture"},
+		}},
+		Modules: []*store.Module{
+			{ID: "auth", Shared: false},
+			{ID: "logger", Shared: true},
+		},
+	}
+
+	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, &configpkg.Config{RepoPath: "/tmp/wikismit"})
+	if err != nil {
+		t.Fatalf("GenerateVitePressConfig() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"text: 'Generated Docs'",
+		"'/generated/generated.md'",
+		"text: 'Business Flows'",
+		"'/generated/business.md'",
+		"text: 'Event Flows'",
+		"'/generated/events.md'",
+		"text: 'Architecture'",
+		"'/generated/architecture.md'",
+		"text: 'Modules'",
+		"text: 'Shared'",
+	} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("config missing %q:\n%s", want, result)
+		}
+	}
+
+	generatedIndex := strings.Index(result, "text: 'Generated Docs'")
+	businessIndex := strings.Index(result, "text: 'Business Flows'")
+	eventsIndex := strings.Index(result, "text: 'Event Flows'")
+	architectureIndex := strings.Index(result, "text: 'Architecture'")
+	modulesIndex := strings.Index(result, "text: 'Modules'")
+	sharedIndex := strings.Index(result, "text: 'Shared'")
+	if !(generatedIndex < businessIndex && businessIndex < eventsIndex && eventsIndex < architectureIndex && architectureIndex < modulesIndex && modulesIndex < sharedIndex) {
+		t.Fatalf("config sidebar ordering incorrect:\n%s", result)
+	}
+}
+
+func TestGenerateVitePressConfigNavigationLegacyModulesOnlyStillWorks(t *testing.T) {
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
+
+	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, &configpkg.Config{RepoPath: "/tmp/wikismit"})
+	if err != nil {
+		t.Fatalf("GenerateVitePressConfig() error = %v", err)
+	}
+
+	if strings.Contains(result, "'/generated/") {
+		t.Fatalf("legacy modules-only config unexpectedly contains generated nav links:\n%s", result)
+	}
+	if !strings.Contains(result, "'/modules/auth.md'") {
+		t.Fatalf("legacy modules-only config missing module link:\n%s", result)
+	}
+}
+
+func TestGenerateVitePressConfigNavigationToleratesNilSite(t *testing.T) {
+	plan := &store.NavPlan{Modules: []*store.Module{{ID: "auth", Shared: false}}}
+
+	result, err := GenerateVitePressConfig(plan, store.DepGraph{}, &configpkg.Config{RepoPath: "/tmp/wikismit"})
+	if err != nil {
+		t.Fatalf("GenerateVitePressConfig() error = %v", err)
+	}
+
+	if !strings.Contains(result, "title: 'wikismit'") {
+		t.Fatalf("config missing repo fallback title when site is nil:\n%s", result)
 	}
 }
 

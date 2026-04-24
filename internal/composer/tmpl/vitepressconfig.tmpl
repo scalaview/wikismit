@@ -15,6 +15,16 @@ export default defineConfig({
     },
 {{- end }}
     sidebar: [
+{{- range .NavigationSections }}
+      {
+        text: '{{ .Text }}',
+        items: [
+{{- range .Items }}
+          { text: '{{ .Text }}', link: '{{ .Link }}' },
+{{- end }}
+        ],
+      },
+{{- end }}
       {
         text: 'Modules',
         items: [
