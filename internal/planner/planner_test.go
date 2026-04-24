@@ -494,7 +494,7 @@ func TestRunPlannerUsesInteractiveFlowWhenEnabled(t *testing.T) {
 
 	client := llm.NewMockClient(
 		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
-		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":2,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`,
 	)
 
 	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)
@@ -526,7 +526,7 @@ func TestRunPlannerPrefersInteractiveFlowOverExploreWhenBothEnabled(t *testing.T
 
 	client := llm.NewMockClient(
 		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
-		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":2,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`,
 	)
 
 	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)
