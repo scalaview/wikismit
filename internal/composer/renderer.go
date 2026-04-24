@@ -122,6 +122,14 @@ func GenerateSectionFilename(section *store.NavigationSection) string {
 }
 
 func renderNavigationSection(section *store.NavigationSection) (string, error) {
+	templateToUse := &tmpl.NavigationSectionTmplParsed
+	switch section.Type {
+	case "events":
+		templateToUse = &tmpl.EventFlowDocTmplParsed
+	case "business":
+		templateToUse = &tmpl.CallbackFlowDocTmplParsed
+	}
+
 	data := &navigationSectionTemplateData{
 		Title:       section.Title,
 		Description: section.Description,
@@ -146,11 +154,25 @@ func renderNavigationSection(section *store.NavigationSection) (string, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.NavigationSectionTmplParsed.Execute(&buf, data); err != nil {
+	if err := templateToUse.Execute(&buf, data); err != nil {
 		return "", err
 	}
 
 	return buf.String(), nil
+}
+
+func renderEventFlowSection(section *store.NavigationSection) (string, error) {
+	if section == nil {
+		return "", nil
+	}
+	return renderNavigationSection(section)
+}
+
+func renderCallbackSection(section *store.NavigationSection) (string, error) {
+	if section == nil {
+		return "", nil
+	}
+	return renderNavigationSection(section)
 }
 
 func RenderNavigationSections(docsDir string, plan *store.NavPlan) error {
@@ -167,7 +189,18 @@ func RenderNavigationSections(docsDir string, plan *store.NavPlan) error {
 		if section == nil {
 			continue
 		}
-		rendered, err := renderNavigationSection(section)
+		var (
+			rendered string
+			err      error
+		)
+		switch section.Type {
+		case "events":
+			rendered, err = renderEventFlowSection(section)
+		case "business":
+			rendered, err = renderCallbackSection(section)
+		default:
+			rendered, err = renderNavigationSection(section)
+		}
 		if err != nil {
 			return err
 		}

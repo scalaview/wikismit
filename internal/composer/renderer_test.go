@@ -195,6 +195,77 @@ func TestGenerateIndexPageIncludesSharedUsedByColumn(t *testing.T) {
 	}
 }
 
+func TestRenderEventFlowSection(t *testing.T) {
+	section := &store.NavigationSection{
+		Title:       "Event Flows",
+		Type:        "events",
+		Description: "Generated event flow reference.",
+		Items: []*store.NavigationItem{{
+			Title:      "Token generated",
+			Path:       "modules/auth.md",
+			EntryPoint: "internal/auth/jwt.go#GenerateToken",
+			Events:     []string{"token.generated", "audit.logged"},
+			Highlights: []string{"Issues JWTs", "Emits audit trail"},
+		}},
+	}
+
+	rendered, err := renderEventFlowSection(section)
+	if err != nil {
+		t.Fatalf("renderEventFlowSection() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"# Event Flows",
+		"Generated event flow reference.",
+		"## Token generated",
+		"[Token generated](../modules/auth.md)",
+		"internal/auth/jwt.go#GenerateToken",
+		"token.generated",
+		"audit.logged",
+		"Issues JWTs",
+		"Emits audit trail",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("event flow render missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderCallbackSection(t *testing.T) {
+	section := &store.NavigationSection{
+		Title:       "Business Callbacks",
+		Type:        "business",
+		Description: "Callback integration entry points.",
+		Items: []*store.NavigationItem{{
+			Title:      "User webhook callback",
+			Path:       "shared/webhooks.md",
+			Highlights: []string{"Validates signatures", "Queues async processing"},
+		}},
+	}
+
+	rendered, err := renderCallbackSection(section)
+	if err != nil {
+		t.Fatalf("renderCallbackSection() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"# Business Callbacks",
+		"Callback integration entry points.",
+		"## User webhook callback",
+		"[User webhook callback](../shared/webhooks.md)",
+		"Validates signatures",
+		"Queues async processing",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("callback flow render missing %q:\n%s", want, rendered)
+		}
+	}
+
+	if strings.Contains(rendered, "Entry point:") {
+		t.Fatalf("callback flow render unexpectedly included empty entry point:\n%s", rendered)
+	}
+}
+
 func TestRunComposerWritesGeneratedNavigationPagesWhenSectionsPresent(t *testing.T) {
 	artifactsDir := t.TempDir()
 	outputDir := t.TempDir()

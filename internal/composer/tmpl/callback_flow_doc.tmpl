@@ -1,0 +1,23 @@
+# {{ .Title }}
+
+{{- if .Description }}
+{{ .Description }}
+
+{{- end }}
+{{- range .Items }}
+## {{ .Title }}
+
+{{- if .Link }}
+- Doc: [{{ .Title }}]({{ .Link }})
+{{- end }}
+{{- if .EntryPoint }}
+- Entry point: `{{ .EntryPoint }}`
+{{- end }}
+{{- if .Highlights }}
+- Highlights:
+{{- range .Highlights }}
+  - {{ . }}
+{{- end }}
+{{- end }}
+
+{{- end }}
