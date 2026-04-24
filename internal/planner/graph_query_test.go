@@ -133,6 +133,32 @@ func TestQueryCallChainRejectsUnknownFunction(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown function ref") {
 		t.Fatalf("QueryCallChain() error = %v, want unknown function ref context", err)
 	}
+	if !strings.Contains(err.Error(), "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("QueryCallChain() error = %v, want QUERYABLE_FUNCTIONS guidance", err)
+	}
+	if !strings.Contains(err.Error(), "read_file") {
+		t.Fatalf("QueryCallChain() error = %v, want read_file guidance", err)
+	}
+}
+
+func TestQueryCallChainRejectsTypeLikeRefsWithHelpfulMessage(t *testing.T) {
+	t.Helper()
+
+	idx, callGraph := buildQueryCallChainFixture()
+
+	_, err := QueryCallChain(idx, callGraph, store.EventFactIndex{}, CallChainQuery{
+		FunctionRef: "svc/handler.go#Handler",
+		Direction:   "downstream",
+		Depth:       1,
+	})
+	if err == nil {
+		t.Fatal("QueryCallChain() error = nil, want error")
+	}
+	for _, want := range []string{"unknown function ref", "QUERYABLE_FUNCTIONS", "read_file"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("QueryCallChain() error = %v, want %q guidance", err, want)
+		}
+	}
 }
 
 func TestQueryCallChainSupportsMethodFunctionRefsAgainstRawCallGraphKeys(t *testing.T) {

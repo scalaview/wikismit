@@ -14,7 +14,7 @@ func QueryCallChain(idx store.FileIndex, callGraph store.CallGraph, eventIdx sto
 
 	seedFn := funcByID[q.FunctionRef]
 	if seedFn == nil {
-		return nil, fmt.Errorf("unknown function ref %q", q.FunctionRef)
+		return nil, fmt.Errorf("unknown function ref %q: use exact refs from QUERYABLE_FUNCTIONS for read_function/call_chain, or use read_file with a FILE path for type and file inspection", q.FunctionRef)
 	}
 
 	depth := q.Depth
