@@ -106,11 +106,12 @@ Available request types:
 
 Rules:
 - If you still need evidence, return JSON with: {"round":N,"understanding":"...","requests":[...]}
-- If you are ready to finish, return JSON with: {"round":N,"navigation":{"modules":[...]}}
-- Final navigation should include version and may include navigation.sections.
-- Final navigation must stay modules-compatible for now.
+- If you are ready to finish, return JSON with: {"round":N,"modules":[...],"navigation":{"sections":[...]}}
+- Terminal payload must use top-level ` + "`modules`" + ` and optional top-level ` + "`navigation`" + `.
+- Terminal ` + "`navigation`" + ` maps to the ` + "`store.Navigation`" + ` subtree only.
+- Terminal ` + "`navigation`" + ` must not wrap another ` + "`modules`" + ` object and must not be presented as a full NavPlan.
 - Every file must appear in exactly one module.
-- Modules stay required for compatibility, even when navigation.sections is present.
+- Modules are always required in the terminal payload, even when navigation.sections is present.
 - Every module must include owner.
 - Shared modules must have owner: "shared_preprocessor".
 - Non-shared modules must have owner: "agent".
@@ -149,7 +150,9 @@ Rules:
 	}
 
 	sb.WriteString("Navigation schema:\n")
-	sb.WriteString(`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated Overview","description":"...","items":[{"title":"Entry","path":"docs/modules/module.md","entry_point":"path/to/file.go#Name","events":["domain.event"],"highlights":["important detail"]}]},{"type":"modules","title":"Modules","items":[{"title":"Module","path":"docs/modules/module.md"}]}]},"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[],"navigation_refs":["generated","modules"]}]}`)
+	sb.WriteString(`{"round":N,"understanding":"...","requests":[{"type":"call_chain","params":{"function_ref":"path/to/file.go#Name","direction":"downstream","depth":2}}]}`)
+	sb.WriteString("\n")
+	sb.WriteString(`{"round":N,"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[],"navigation_refs":["generated","modules"]}],"navigation":{"sections":[{"type":"generated","title":"Generated Overview","description":"...","items":[{"title":"Entry","path":"docs/modules/module.md","entry_point":"path/to/file.go#Name","events":["domain.event"],"highlights":["important detail"]}]},{"type":"modules","title":"Modules","items":[{"title":"Module","path":"docs/modules/module.md"}]}]}}`)
 	sb.WriteString("\n\nSkeleton:\n")
 	sb.WriteString(contextState.Skeleton)
 
