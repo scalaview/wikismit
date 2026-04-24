@@ -26,6 +26,10 @@ analysis:
     min_func_lines: 5
     min_called_by: 1
     min_importance: 0.05
+  interactive_planner:
+    enabled: false
+    max_rounds: 4
+    max_requests_per_round: 5
   function_summary_agent:
     max_retries: 3
     context_budget: 10000
@@ -43,5 +47,9 @@ site:
   title: ""
   repo_url: ""
   logo: ""
+
+event_flow:
+  enabled: false
+  include_hints_in_round1: false
 
 language: "English"
