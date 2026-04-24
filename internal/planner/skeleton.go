@@ -198,7 +198,7 @@ func BuildFullSkeleton(idx store.FileIndex, maxTokens int) string {
 }
 
 // BuildPlannerSkeleton produces a minimal skeleton for the Planner.
-// It outputs file paths, exported type names, and internal import relationships.
+// It outputs file paths, exported type names, internal import relationships, and queryable function IDs.
 // Function signatures are excluded, achieving ~70-80% compression vs BuildFullSkeleton.
 // Truncation is file-granular: entire files are included or skipped.
 func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
@@ -217,39 +217,8 @@ func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
 			continue
 		}
 
-		// Build all output lines for this file first
-		var fileLines []string
-		fileChars := 0
+		fileLines, _ := buildPlannerSkeletonFileBlock(file, entry)
 
-		// File path header
-		header := fmt.Sprintf("// %s", file)
-		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, header)
-
-		// Exported type names (comma-separated on one line)
-		var typeNames []string
-		for _, typ := range entry.Types {
-			if typ.Exported {
-				typeNames = append(typeNames, typ.Name)
-			}
-		}
-		if len(typeNames) > 0 {
-			typeLine := fmt.Sprintf("  type %s", strings.Join(typeNames, ", "))
-			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, typeLine)
-		}
-
-		// Internal import relationships
-		var importPaths []string
-		for _, imp := range entry.Imports {
-			if imp.Internal && imp.ResolvedPath != "" {
-				importPaths = append(importPaths, imp.ResolvedPath)
-			}
-		}
-		if len(importPaths) > 0 {
-			importLine := fmt.Sprintf("  -> %s", strings.Join(importPaths, ", "))
-			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, importLine)
-		}
-
-		// Check token budget at file granularity
 		testChars := chars
 		wouldExceed := false
 		for _, l := range fileLines {
@@ -270,7 +239,6 @@ func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
 			break
 		}
 
-		// Include entire file
 		for _, l := range fileLines {
 			lines, chars = appendLineWithCharCount(lines, chars, l)
 		}
@@ -279,15 +247,13 @@ func BuildPlannerSkeleton(idx store.FileIndex, maxTokens int) string {
 	return strings.Join(lines, "\n")
 }
 
-// BuildPlannerSkeletonWithImportance builds a planner skeleton with importance markers.
-// Files with higher-importance functions appear first. Important functions (above 75th
-// percentile) are prefixed with "★ " to guide the planner's attention.
+// BuildPlannerSkeletonWithImportance builds a planner skeleton with importance-based file ordering.
+// Files with higher-importance functions appear first. Content is identical to BuildPlannerSkeleton.
 func BuildPlannerSkeletonWithImportance(idx store.FileIndex, maxTokens int, filter *metrics.ImportanceFilter) string {
 	if filter == nil {
 		return BuildPlannerSkeleton(idx, maxTokens)
 	}
 
-	// Sort files: files with important functions come first
 	sortedFiles := sortFilesByMaxImportance(idx, filter)
 
 	var lines []string
@@ -299,51 +265,8 @@ func BuildPlannerSkeletonWithImportance(idx store.FileIndex, maxTokens int, filt
 			continue
 		}
 
-		// Build all output lines for this file
-		var fileLines []string
-		fileChars := 0
+		fileLines, _ := buildPlannerSkeletonFileBlock(file, entry)
 
-		// File path header
-		header := fmt.Sprintf("// %s", file)
-		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, header)
-
-		// Exported type names (same as original)
-		var typeNames []string
-		for _, typ := range entry.Types {
-			if typ.Exported {
-				typeNames = append(typeNames, typ.Name)
-			}
-		}
-		if len(typeNames) > 0 {
-			typeLine := fmt.Sprintf("  type %s", strings.Join(typeNames, ", "))
-			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, typeLine)
-		}
-
-		// Internal import relationships (same as original)
-		var importPaths []string
-		for _, imp := range entry.Imports {
-			if imp.Internal && imp.ResolvedPath != "" {
-				importPaths = append(importPaths, imp.ResolvedPath)
-			}
-		}
-		if len(importPaths) > 0 {
-			importLine := fmt.Sprintf("  -> %s", strings.Join(importPaths, ", "))
-			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, importLine)
-		}
-
-		// Functions with importance markers (NEW - not in original BuildPlannerSkeleton)
-		for _, fn := range entry.Functions {
-			marker := ""
-			id := store.FuncID(fn)
-			if filter.IsImportant(id) {
-				marker = "★ "
-			}
-			sig := formatShortSignature(fn.Signature)
-			fnLine := fmt.Sprintf("  %s%s  // %s:%d", marker, sig, file, fn.LineStart)
-			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fnLine)
-		}
-
-		// Check token budget at file granularity
 		testChars := chars
 		wouldExceed := false
 		for _, l := range fileLines {
@@ -370,6 +293,86 @@ func BuildPlannerSkeletonWithImportance(idx store.FileIndex, maxTokens int, filt
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func buildPlannerSkeletonFileBlock(file string, entry *store.FileEntry) ([]string, int) {
+	var fileLines []string
+	fileChars := 0
+
+	fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fmt.Sprintf("FILE: %s", file))
+
+	functionIDs := collectQueryableFunctionIDs(entry)
+	if len(functionIDs) > 0 {
+		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, "QUERYABLE_FUNCTIONS")
+		for _, fnID := range functionIDs {
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fmt.Sprintf("  %s", fnID))
+		}
+	}
+
+	typeLines := collectPlannerTypeLines(entry)
+	if len(typeLines) > 0 {
+		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, "TYPES")
+		for _, typeLine := range typeLines {
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fmt.Sprintf("  %s", typeLine))
+		}
+	}
+
+	importPaths := collectPlannerImportPaths(entry)
+	if len(importPaths) > 0 {
+		fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, "INTERNAL_IMPORTS")
+		for _, impPath := range importPaths {
+			fileLines, fileChars = appendLineWithCharCount(fileLines, fileChars, fmt.Sprintf("  %s", impPath))
+		}
+	}
+
+	return fileLines, fileChars
+}
+
+func collectQueryableFunctionIDs(entry *store.FileEntry) []string {
+	if entry == nil {
+		return nil
+	}
+
+	functionIDs := make([]string, 0, len(entry.Functions))
+	for _, fn := range entry.Functions {
+		if fn == nil || !fn.Exported {
+			continue
+		}
+		if fnID := store.FuncID(fn); fnID != "" {
+			functionIDs = append(functionIDs, fnID)
+		}
+	}
+	return functionIDs
+}
+
+func collectPlannerTypeLines(entry *store.FileEntry) []string {
+	if entry == nil {
+		return nil
+	}
+
+	typeLines := make([]string, 0, len(entry.Types))
+	for _, typ := range entry.Types {
+		if typ == nil || !typ.Exported {
+			continue
+		}
+		typeLines = append(typeLines, fmt.Sprintf("%s %s", typ.Name, typ.Kind))
+	}
+	return typeLines
+}
+
+func collectPlannerImportPaths(entry *store.FileEntry) []string {
+	if entry == nil {
+		return nil
+	}
+
+	importPaths := make([]string, 0, len(entry.Imports))
+	for _, imp := range entry.Imports {
+		if imp == nil || !imp.Internal || imp.ResolvedPath == "" {
+			continue
+		}
+		importPaths = append(importPaths, imp.ResolvedPath)
+	}
+	return importPaths
 }
 
 // sortFilesByMaxImportance returns file paths sorted by their highest importance score.
