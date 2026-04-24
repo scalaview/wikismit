@@ -186,3 +186,75 @@ func TestBuildExploreSkeletonIncludesEventHintsWhenEnabled(t *testing.T) {
 		t.Fatalf("expected hints when enabled:\n%s", result)
 	}
 }
+
+func TestBuildExploreSkeletonIncludesWiringLikeFunctionsEvenWhenLowImportance(t *testing.T) {
+	idx := store.FileIndex{
+		"internal/bootstrap/events.go": &store.FileEntry{
+			Path: "internal/bootstrap/events.go",
+			Functions: []*store.FunctionDecl{
+				{Name: "RegisterHandlers", Signature: "func RegisterHandlers(bus Bus)", LineStart: 10, LineEnd: 12, Path: "internal/bootstrap/events.go"},
+				{Name: "helper", Signature: "func helper()", LineStart: 20, LineEnd: 22, Path: "internal/bootstrap/events.go"},
+			},
+		},
+	}
+	metricsMap := store.MetricsMap{
+		"internal/bootstrap/events.go#RegisterHandlers": {FuncID: "internal/bootstrap/events.go#RegisterHandlers", LinesOfCode: 3, ImportanceScore: 0.01},
+		"internal/bootstrap/events.go#helper":           {FuncID: "internal/bootstrap/events.go#helper", LinesOfCode: 3, ImportanceScore: 0.01},
+	}
+	filter := metrics.NewImportanceFilter(metricsMap, 0)
+
+	result := BuildExploreSkeleton(idx, 5000, filter, DefaultSkeletonFilterConfig())
+	if !strings.Contains(result, "RegisterHandlers") {
+		t.Fatalf("expected wiring-like function to be included despite low importance:\n%s", result)
+	}
+	if strings.Contains(result, "func helper()") {
+		t.Fatalf("expected unrelated low-importance helper to remain excluded:\n%s", result)
+	}
+}
+
+func TestBuildExploreSkeletonPrefersEventLandmarkFunctionsInOrdering(t *testing.T) {
+	idx := store.FileIndex{
+		"internal/router/routes.go": &store.FileEntry{
+			Path: "internal/router/routes.go",
+			Functions: []*store.FunctionDecl{
+				{
+					Name:      "BuildRoutes",
+					Signature: "func BuildRoutes()",
+					LineStart: 10,
+					LineEnd:   25,
+					Path:      "internal/router/routes.go",
+					CalledBy:  []*store.CallRef{{Name: "main"}},
+				},
+				{
+					Name:      "HandleUserCreated",
+					Signature: "func HandleUserCreated(evt Event)",
+					LineStart: 40,
+					LineEnd:   60,
+					Path:      "internal/router/routes.go",
+					CalledBy:  []*store.CallRef{{Name: "main"}},
+					EventFacts: &store.EventFacts{
+						Handles: []*store.EventFact{{EventName: "user.created", Line: 45, Evidence: "switch evt.Name"}},
+					},
+				},
+			},
+		},
+	}
+	metricsMap := store.MetricsMap{
+		"internal/router/routes.go#BuildRoutes":       {FuncID: "internal/router/routes.go#BuildRoutes", LinesOfCode: 16, ImportanceScore: 0.2},
+		"internal/router/routes.go#HandleUserCreated": {FuncID: "internal/router/routes.go#HandleUserCreated", LinesOfCode: 21, ImportanceScore: 0.2},
+	}
+	filter := metrics.NewImportanceFilter(metricsMap, 0)
+
+	result := BuildExploreSkeleton(idx, 5000, filter, DefaultSkeletonFilterConfig())
+	eventPos := strings.Index(result, "HandleUserCreated")
+	plainPos := strings.Index(result, "BuildRoutes")
+	if eventPos == -1 || plainPos == -1 {
+		t.Fatalf("expected both functions in skeleton:\n%s", result)
+	}
+	if eventPos > plainPos {
+		t.Fatalf("expected event-landmark function before plain function:\n%s", result)
+	}
+	if !strings.Contains(result, "user.created") {
+		t.Fatalf("expected event landmark details in skeleton:\n%s", result)
+	}
+}
