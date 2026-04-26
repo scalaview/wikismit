@@ -225,6 +225,66 @@ func TestBuildInteractivePlannerPromptStatesOnlyQueryableFunctionsAreCallable(t 
 	}
 }
 
+func TestBuildInteractivePlannerPromptPlacesMethodLegendBeforeSkeleton(t *testing.T) {
+	contextState := &PlannerRoundContext{
+		Round: 1,
+		Skeleton: `<file>
+svc/handler.go
+<methods>
+svc/handler.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82
+</methods>
+</file>`,
+	}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	legendIdx := strings.Index(got, "Method line format:")
+	skeletonIdx := strings.Index(got, "Skeleton:")
+	if legendIdx == -1 || skeletonIdx == -1 || legendIdx > skeletonIdx {
+		t.Fatalf("legend must appear before skeleton:\n%s", got)
+	}
+}
+
+func TestBuildInteractivePlannerPromptExplainsMethodMetricFields(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/handler.go\n</file>"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, want := range []string{
+		"FuncID: exact queryable function reference.",
+		"loc: lines of code",
+		"out: internal outbound call count",
+		"depth: distance from an inferred entry point; -1 means unreachable",
+		"reach: number of inferred entry points that can reach this function",
+		"exported: whether the function is public/exported",
+		"entry: whether the function is an inferred entry point",
+		"imp: normalized importance score",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptTreatsEventLandmarksAsOptional(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/handler.go\n<methods>\nsvc/handler.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82\n</methods>\n</file>"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	if !strings.Contains(got, "Event landmark format:") {
+		t.Fatalf("buildInteractivePlannerPrompt() missing event landmark legend:\n%s", got)
+	}
+	for _, unwanted := range []string{
+		"some files may not have event landmarks",
+		"if event_landmarks is absent",
+		"missing event section",
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("buildInteractivePlannerPrompt() unexpectedly contained %q:\n%s", unwanted, got)
+		}
+	}
+}
+
 func TestBuildInteractivePlannerPromptUsesReceiverAwareMethodExamples(t *testing.T) {
 	contextState := &PlannerRoundContext{Round: 1, Skeleton: "FILE: svc/service.go"}
 
