@@ -196,25 +196,36 @@ func TestBuildPlannerSkeletonOutputsFilePathTypesAndImports(t *testing.T) {
 
 	got := BuildPlannerSkeleton(idx, 10_000)
 
-	// File path headers
-	if !strings.Contains(got, "// internal/auth/jwt.go") {
-		t.Fatalf("missing jwt.go file header:\n%s", got)
+	if !strings.Contains(got, "FILE: internal/auth/jwt.go") {
+		t.Fatalf("missing jwt.go FILE header:\n%s", got)
 	}
-	if !strings.Contains(got, "// internal/auth/middleware.go") {
-		t.Fatalf("missing middleware.go file header:\n%s", got)
+	if !strings.Contains(got, "FILE: internal/auth/middleware.go") {
+		t.Fatalf("missing middleware.go FILE header:\n%s", got)
 	}
-	// Exported type names
-	if !strings.Contains(got, "type Claims") {
+	if !strings.Contains(got, "TYPES") {
+		t.Fatalf("missing TYPES section label:\n%s", got)
+	}
+	if !strings.Contains(got, "INTERNAL_IMPORTS") {
+		t.Fatalf("missing INTERNAL_IMPORTS section label:\n%s", got)
+	}
+	if !strings.Contains(got, "  Claims struct") {
 		t.Fatalf("missing Claims type:\n%s", got)
 	}
-	if !strings.Contains(got, "type Handler") {
+	if !strings.Contains(got, "  Handler interface") {
 		t.Fatalf("missing Handler type:\n%s", got)
 	}
 	// Internal import relationships
-	if !strings.Contains(got, "-> pkg/crypto/hash.go") {
+	if !strings.Contains(got, "  Claims struct") {
+		t.Fatalf("missing Claims type:\n%s", got)
+	}
+	if !strings.Contains(got, "  Handler interface") {
+		t.Fatalf("missing Handler type:\n%s", got)
+	}
+	// Internal import relationships
+	if !strings.Contains(got, "  pkg/crypto/hash.go") {
 		t.Fatalf("missing internal import for jwt.go:\n%s", got)
 	}
-	if !strings.Contains(got, "-> internal/auth/jwt.go") {
+	if !strings.Contains(got, "  internal/auth/jwt.go") {
 		t.Fatalf("missing internal import for middleware.go:\n%s", got)
 	}
 }
@@ -224,14 +235,23 @@ func TestBuildPlannerSkeletonExcludesFunctionSignatures(t *testing.T) {
 
 	got := BuildPlannerSkeleton(idx, 10_000)
 
-	if strings.Contains(got, "GenerateToken") {
-		t.Fatalf("should not contain function names, got:\n%s", got)
+	if !strings.Contains(got, "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("missing QUERYABLE_FUNCTIONS section:\n%s", got)
 	}
-	if strings.Contains(got, "Middleware") {
-		t.Fatalf("should not contain function names, got:\n%s", got)
+	if !strings.Contains(got, "internal/auth/jwt.go#GenerateToken") {
+		t.Fatalf("missing function ID in QUERYABLE_FUNCTIONS:\n%s", got)
 	}
-	if strings.Contains(got, "func ") {
-		t.Fatalf("should not contain any func keyword, got:\n%s", got)
+	if !strings.Contains(got, "internal/auth/middleware.go#Middleware") {
+		t.Fatalf("missing function ID in QUERYABLE_FUNCTIONS:\n%s", got)
+	}
+	if strings.Contains(got, "func GenerateToken") {
+		t.Fatalf("should not contain function signature, got:\n%s", got)
+	}
+	if strings.Contains(got, "func Middleware") {
+		t.Fatalf("should not contain function signature, got:\n%s", got)
+	}
+	if strings.Contains(got, "★") {
+		t.Fatalf("should not contain star markers, got:\n%s", got)
 	}
 }
 
@@ -240,17 +260,21 @@ func TestBuildPlannerSkeletonTruncatesAtFileGranularity(t *testing.T) {
 
 	got := BuildPlannerSkeleton(idx, 10)
 
-	// Must stay within token budget
 	if estimateTokens(got) > 10 {
 		t.Fatalf("estimateTokens() = %d, want <= 10\n%s", estimateTokens(got), got)
 	}
 
-	// If a file appears, its content must be complete (no partial truncation)
-	if strings.Contains(got, "// internal/auth/jwt.go") {
-		if !strings.Contains(got, "type Claims") {
+	if strings.Contains(got, "FILE: internal/auth/jwt.go") {
+		if !strings.Contains(got, "TYPES") {
+			t.Fatalf("jwt.go header present but TYPES section missing (partial file):\n%s", got)
+		}
+		if !strings.Contains(got, "  Claims struct") {
 			t.Fatalf("jwt.go header present but type line missing (partial file):\n%s", got)
 		}
-		if !strings.Contains(got, "-> pkg/crypto/hash.go") {
+		if !strings.Contains(got, "INTERNAL_IMPORTS") {
+			t.Fatalf("jwt.go header present but INTERNAL_IMPORTS section missing (partial file):\n%s", got)
+		}
+		if !strings.Contains(got, "  pkg/crypto/hash.go") {
 			t.Fatalf("jwt.go header present but import line missing (partial file):\n%s", got)
 		}
 	}
@@ -261,16 +285,20 @@ func TestBuildPlannerSkeletonIncludesEmptyFilesAsPlaceholder(t *testing.T) {
 
 	got := BuildPlannerSkeleton(idx, 10_000)
 
-	if !strings.Contains(got, "// internal/util/empty.go") {
+	if !strings.Contains(got, "FILE: internal/util/empty.go") {
 		t.Fatalf("empty file should appear as placeholder:\n%s", got)
 	}
-	// Ensure no type or import lines after empty file header
 	lines := strings.Split(got, "\n")
 	for i, line := range lines {
-		if line == "// internal/util/empty.go" {
-			// Next line should not be indented (no type or import)
-			if i+1 < len(lines) && (strings.HasPrefix(lines[i+1], "  type") || strings.HasPrefix(lines[i+1], "  ->")) {
-				t.Fatalf("empty file should have no type/import lines:\n%s", got)
+		if line == "FILE: internal/util/empty.go" {
+			if i+1 < len(lines) {
+				nextLine := lines[i+1]
+				if nextLine == "QUERYABLE_FUNCTIONS" || nextLine == "TYPES" || nextLine == "INTERNAL_IMPORTS" {
+					t.Fatalf("empty file should not have section labels:\n%s", got)
+				}
+				if strings.HasPrefix(nextLine, "  ") {
+					t.Fatalf("empty file should have no indented content:\n%s", got)
+				}
 			}
 			return
 		}
@@ -282,15 +310,13 @@ func TestBuildPlannerSkeletonIgnoresExternalImports(t *testing.T) {
 
 	got := BuildPlannerSkeleton(idx, 10_000)
 
-	// pkg/crypto/hash.go has only external imports (crypto/sha256)
-	// It should NOT show any -> line
 	lines := strings.Split(got, "\n")
 	for i, line := range lines {
-		if line == "// pkg/crypto/hash.go" {
+		if line == "FILE: pkg/crypto/hash.go" {
 			if i+1 < len(lines) {
 				next := lines[i+1]
-				if strings.HasPrefix(next, "  ->") {
-					t.Fatalf("external import should not appear in -> line:\n%s", got)
+				if next == "INTERNAL_IMPORTS" {
+					t.Fatalf("file with only external imports should not have INTERNAL_IMPORTS section:\n%s", got)
 				}
 			}
 			return
@@ -322,17 +348,22 @@ func TestBuildPlannerSkeletonWithImportanceNilFilter(t *testing.T) {
 	idx := plannerFileIndex()
 
 	got := BuildPlannerSkeletonWithImportance(idx, 10_000, nil)
+	standard := BuildPlannerSkeleton(idx, 10_000)
 
-	// Should fallback to standard skeleton (no function names)
-	if strings.Contains(got, "func ") {
-		t.Fatalf("nil filter should use standard skeleton without functions, got:\n%s", got)
+	if !strings.Contains(got, "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("nil filter should include QUERYABLE_FUNCTIONS section, got:\n%s", got)
+	}
+	if !strings.Contains(got, "internal/auth/jwt.go#GenerateToken") {
+		t.Fatalf("nil filter should include function IDs, got:\n%s", got)
+	}
+	if !strings.Contains(standard, "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("standard skeleton missing QUERYABLE_FUNCTIONS:\n%s", standard)
 	}
 }
 
-func TestBuildPlannerSkeletonWithImportanceMarkers(t *testing.T) {
+func TestBuildPlannerSkeletonWithImportanceIncludesQueryables(t *testing.T) {
 	idx := plannerFileIndex()
 
-	// Create testMetrics where GenerateToken is important, Middleware is not
 	testMetrics := store.MetricsMap{
 		"internal/auth/jwt.go#GenerateToken":    {FuncID: "internal/auth/jwt.go#GenerateToken", ImportanceScore: 0.95},
 		"internal/auth/middleware.go#Middleware": {FuncID: "internal/auth/middleware.go#Middleware", ImportanceScore: 0.3},
@@ -341,13 +372,17 @@ func TestBuildPlannerSkeletonWithImportanceMarkers(t *testing.T) {
 
 	got := BuildPlannerSkeletonWithImportance(idx, 10_000, filter)
 
-	// Important function should have ★ marker
-	if !strings.Contains(got, "★") {
-		t.Fatalf("expected ★ marker for important functions, got:\n%s", got)
+	if !strings.Contains(got, "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("missing QUERYABLE_FUNCTIONS section:\n%s", got)
 	}
-	// Function signatures should be present (unlike standard BuildPlannerSkeleton)
-	if !strings.Contains(got, "GenerateToken") {
-		t.Fatalf("expected function name in importance skeleton, got:\n%s", got)
+	if !strings.Contains(got, "internal/auth/jwt.go#GenerateToken") {
+		t.Fatalf("missing function ID in QUERYABLE_FUNCTIONS:\n%s", got)
+	}
+	if !strings.Contains(got, "internal/auth/middleware.go#Middleware") {
+		t.Fatalf("missing function ID in QUERYABLE_FUNCTIONS:\n%s", got)
+	}
+	if strings.Contains(got, "★") {
+		t.Fatalf("should not contain star markers, got:\n%s", got)
 	}
 }
 
@@ -376,13 +411,19 @@ func TestBuildPlannerSkeletonWithImportanceOrdersFilesByScore(t *testing.T) {
 
 	got := BuildPlannerSkeletonWithImportance(idx, 10_000, filter)
 
-	highIdx := strings.Index(got, "pkg/high.go")
-	lowIdx := strings.Index(got, "pkg/low.go")
+	highIdx := strings.Index(got, "FILE: pkg/high.go")
+	lowIdx := strings.Index(got, "FILE: pkg/low.go")
 	if highIdx == -1 || lowIdx == -1 {
-		t.Fatalf("missing file headers:\n%s", got)
+		t.Fatalf("missing FILE headers:\n%s", got)
 	}
 	if highIdx > lowIdx {
 		t.Fatalf("high.go should appear before low.go (higher importance), got:\n%s", got)
+	}
+	if !strings.Contains(got, "QUERYABLE_FUNCTIONS") {
+		t.Fatalf("missing QUERYABLE_FUNCTIONS section:\n%s", got)
+	}
+	if !strings.Contains(got, "pkg/high.go#Main") {
+		t.Fatalf("missing function ID:\n%s", got)
 	}
 }
 
@@ -397,5 +438,13 @@ func TestBuildPlannerSkeletonWithImportanceRespectsTokenBudget(t *testing.T) {
 
 	if estimateTokens(got) > 15 {
 		t.Fatalf("estimateTokens() = %d, want <= 15\n%s", estimateTokens(got), got)
+	}
+	if strings.Contains(got, "FILE: internal/auth/jwt.go") {
+		if !strings.Contains(got, "QUERYABLE_FUNCTIONS") {
+			t.Fatalf("importance skeleton included partial jwt.go block without QUERYABLE_FUNCTIONS:\n%s", got)
+		}
+		if !strings.Contains(got, "  internal/auth/jwt.go#GenerateToken") {
+			t.Fatalf("importance skeleton included partial jwt.go block without function ref:\n%s", got)
+		}
 	}
 }

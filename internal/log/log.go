@@ -24,7 +24,7 @@ type slogLogger struct {
 }
 
 func New(verbose bool) Logger {
-	return newWithWriter(verbose, os.Stderr)
+	return newWithWriter(verbose, os.Stdout)
 }
 
 func newWithWriter(verbose bool, w io.Writer) Logger {

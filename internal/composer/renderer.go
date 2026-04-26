@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,11 +9,26 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/scalaview/wikismit/internal/composer/tmpl"
 	configpkg "github.com/scalaview/wikismit/internal/config"
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
 var nonAnchorCharRegex = regexp.MustCompile(`[^a-z0-9\- ]+`)
+
+type navigationSectionTemplateItem struct {
+	Title      string
+	Link       string
+	EntryPoint string
+	Events     []string
+	Highlights []string
+}
+
+type navigationSectionTemplateData struct {
+	Title       string
+	Description string
+	Items       []*navigationSectionTemplateItem
+}
 
 func GenerateTOC(content string) string {
 	lines := strings.Split(content, "\n")
@@ -85,6 +101,118 @@ func CopyModuleDocs(artifactsDir string, docsDir string, plan *store.NavPlan, sy
 	return nil
 }
 
+func GenerateSectionFilename(section *store.NavigationSection) string {
+	if section == nil {
+		return "section"
+	}
+
+	base := strings.TrimSpace(section.Type)
+	if base == "" {
+		base = strings.TrimSpace(section.Title)
+	}
+	base = strings.ToLower(base)
+	base = strings.ReplaceAll(base, " ", "_")
+	base = strings.ReplaceAll(base, "-", "_")
+	base = regexp.MustCompile(`[^a-z0-9_]+`).ReplaceAllString(base, "")
+	base = strings.Trim(base, "_")
+	if base == "" {
+		return "section"
+	}
+	return base
+}
+
+func renderNavigationSection(section *store.NavigationSection) (string, error) {
+	templateToUse := &tmpl.NavigationSectionTmplParsed
+	switch section.Type {
+	case "events":
+		templateToUse = &tmpl.EventFlowDocTmplParsed
+	case "business":
+		templateToUse = &tmpl.CallbackFlowDocTmplParsed
+	}
+
+	data := &navigationSectionTemplateData{
+		Title:       section.Title,
+		Description: section.Description,
+		Items:       make([]*navigationSectionTemplateItem, 0, len(section.Items)),
+	}
+
+	for _, item := range section.Items {
+		templateItem := &navigationSectionTemplateItem{
+			Title:      item.Title,
+			EntryPoint: item.EntryPoint,
+			Events:     item.Events,
+			Highlights: item.Highlights,
+		}
+		if item.Path != "" {
+			link, err := filepath.Rel("generated", item.Path)
+			if err != nil {
+				return "", err
+			}
+			templateItem.Link = filepath.ToSlash(link)
+		}
+		data.Items = append(data.Items, templateItem)
+	}
+
+	var buf bytes.Buffer
+	if err := templateToUse.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func renderEventFlowSection(section *store.NavigationSection) (string, error) {
+	if section == nil {
+		return "", nil
+	}
+	return renderNavigationSection(section)
+}
+
+func renderCallbackSection(section *store.NavigationSection) (string, error) {
+	if section == nil {
+		return "", nil
+	}
+	return renderNavigationSection(section)
+}
+
+func RenderNavigationSections(docsDir string, plan *store.NavPlan) error {
+	if plan == nil || plan.Navigation == nil || len(plan.Navigation.Sections) == 0 {
+		return nil
+	}
+
+	generatedDir := filepath.Join(docsDir, "generated")
+	if err := os.MkdirAll(generatedDir, 0o755); err != nil {
+		return err
+	}
+
+	for _, section := range plan.Navigation.Sections {
+		if section == nil {
+			continue
+		}
+		var (
+			rendered string
+			err      error
+		)
+		switch section.Type {
+		case "events":
+			rendered, err = renderEventFlowSection(section)
+		case "business":
+			rendered, err = renderCallbackSection(section)
+		default:
+			rendered, err = renderNavigationSection(section)
+		}
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(generatedDir, GenerateSectionFilename(section)+".md")
+		if err := os.WriteFile(path, []byte(rendered), 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
 	moduleGraph := buildModuleGraph(plan, graph)
 	modules := append([]*store.Module(nil), plan.Modules...)
@@ -99,6 +227,16 @@ func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
 
 	var builder strings.Builder
 	builder.WriteString("# Documentation Index\n\n")
+	if plan != nil && plan.Navigation != nil && len(plan.Navigation.Sections) > 0 {
+		builder.WriteString("## Navigation Sections\n\n")
+		for _, section := range plan.Navigation.Sections {
+			if section == nil {
+				continue
+			}
+			fmt.Fprintf(&builder, "- [%s](generated/%s.md)\n", section.Title, GenerateSectionFilename(section))
+		}
+		builder.WriteString("\n")
+	}
 	builder.WriteString("| Module | Type | Used By |\n")
 	builder.WriteString("| --- | --- | --- |\n")
 	for _, module := range modules {
@@ -110,7 +248,7 @@ func GenerateIndexPage(plan *store.NavPlan, graph store.DepGraph) string {
 				usedBy = strings.Join(module.ReferencedBy, ", ")
 			}
 		}
-		builder.WriteString(fmt.Sprintf("| %s | %s | %s |\n", module.ID, moduleType, usedBy))
+		fmt.Fprintf(&builder, "| %s | %s | %s |\n", module.ID, moduleType, usedBy)
 	}
 
 	return builder.String()
@@ -165,6 +303,9 @@ func dependencyDepth(moduleID string, graph store.DepGraph, seen map[string]bool
 func RunComposer(cfg *configpkg.Config, plan *store.NavPlan, idx store.FileIndex, graph store.DepGraph) error {
 	symbolMap := buildSymbolMap(idx)
 	if err := CopyModuleDocs(cfg.ArtifactsDir, cfg.OutputDir, plan, symbolMap); err != nil {
+		return err
+	}
+	if err := RenderNavigationSections(cfg.OutputDir, plan); err != nil {
 		return err
 	}
 

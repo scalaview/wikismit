@@ -11,11 +11,12 @@ import (
 	"github.com/scalaview/wikismit/pkg/store"
 )
 
-func TestPlannerRoundRequestJSONShape(t *testing.T) {
+func TestPlannerRoundRequestJSONShapeUsesTopLevelModulesAndNavigation(t *testing.T) {
 	t.Helper()
 
 	params := json.RawMessage(`{"function_ref":"svc/service.go#HandleRequest"}`)
-	navigation := json.RawMessage(`{"modules":[{"id":"auth"}]}`)
+	modules := json.RawMessage(`[{"id":"auth","files":["svc/service.go"],"shared":false,"owner":"agent"}]`)
+	navigation := json.RawMessage(`{"sections":[{"type":"generated","title":"Auth"}]}`)
 	request := &PlannerRoundRequest{
 		Round:         2,
 		Understanding: "Need call graph data before final modules",
@@ -23,7 +24,8 @@ func TestPlannerRoundRequestJSONShape(t *testing.T) {
 			Type:   "call_chain",
 			Params: params,
 		}},
-		Navigation: &navigation,
+		Modules:    modules,
+		Navigation: navigation,
 	}
 
 	raw, err := json.Marshal(request)
@@ -36,7 +38,7 @@ func TestPlannerRoundRequestJSONShape(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	for _, key := range []string{"round", "understanding", "requests", "navigation"} {
+	for _, key := range []string{"round", "understanding", "requests", "modules", "navigation"} {
 		if _, ok := got[key]; !ok {
 			t.Fatalf("marshaled PlannerRoundRequest missing key %q: %s", key, raw)
 		}
@@ -58,8 +60,41 @@ func TestPlannerRoundRequestJSONShape(t *testing.T) {
 	if _, ok := first["params"]; !ok {
 		t.Fatalf("marshaled PlannerRoundRequest request missing params: %s", raw)
 	}
+	if _, ok := got["modules"].([]any); !ok {
+		t.Fatalf("marshaled PlannerRoundRequest modules = %#v, want array", got["modules"])
+	}
 	if _, ok := got["navigation"].(map[string]any); !ok {
 		t.Fatalf("marshaled PlannerRoundRequest navigation = %#v, want object", got["navigation"])
+	}
+}
+
+func TestPlannerRoundRequestAllowsModulesOnlyTerminalPayload(t *testing.T) {
+	t.Helper()
+
+	modules := json.RawMessage(`[{"id":"svc","files":["svc/handler.go"],"shared":false,"owner":"agent"}]`)
+	request := &PlannerRoundRequest{
+		Round:   3,
+		Modules: modules,
+	}
+
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	if _, ok := got["modules"].([]any); !ok {
+		t.Fatalf("marshaled PlannerRoundRequest modules = %#v, want array", got["modules"])
+	}
+	if _, ok := got["navigation"]; ok {
+		t.Fatalf("marshaled PlannerRoundRequest unexpectedly included navigation: %s", raw)
+	}
+	if _, ok := got["requests"]; ok {
+		t.Fatalf("marshaled PlannerRoundRequest unexpectedly included requests: %s", raw)
 	}
 }
 
@@ -73,7 +108,7 @@ func TestRunInteractivePlannerRoutesReadRequestsAndQueryRequestsAcrossRounds(t *
 	client := llm.NewMockClient(
 		`{"round":1,"understanding":"Need entry point details first","requests":[{"type":"read_file","params":{"target":"svc/handler.go"}},{"type":"read_function","params":{"target":"svc/service.go#Service#Process"}}]}`,
 		`{"round":2,"understanding":"Need graph traversals","requests":[{"type":"call_chain","params":{"function_ref":"svc/handler.go#HandleRequest","direction":"downstream","depth":2}},{"type":"event_flow","params":{"event_name":"user.created","expand_handlers":true,"handler_depth":1}}]}`,
-		`{"round":3,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":3,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent","navigation_refs":["generated"]}],"navigation":{"sections":[{"type":"generated","title":"Service Overview","items":[{"title":"Handle Request","path":"docs/modules/svc.md","entry_point":"svc/handler.go#HandleRequest"}]}]}}`,
 	)
 
 	got, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
@@ -91,6 +126,9 @@ func TestRunInteractivePlannerRoutesReadRequestsAndQueryRequestsAcrossRounds(t *
 	}
 	if got.GeneratedAt.IsZero() {
 		t.Fatal("RunInteractivePlanner() GeneratedAt is zero, want non-zero time")
+	}
+	if got.Navigation == nil || len(got.Navigation.Sections) != 1 {
+		t.Fatalf("RunInteractivePlanner() navigation = %#v, want one section", got.Navigation)
 	}
 }
 
@@ -122,7 +160,7 @@ func TestRunInteractivePlannerLimitsRequestsPerRound(t *testing.T) {
 
 	client := llm.NewMockClient(
 		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}},{"type":"read_file","params":{"target":"svc/service.go"}},{"type":"read_function","params":{"target":"svc/service.go#Service#Process"}}]}`,
-		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":2,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`,
 	)
 
 	got, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
@@ -142,7 +180,7 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 
 	contextState := &PlannerRoundContext{
 		Round:              2,
-		Skeleton:           "// svc/handler.go\nfunc HandleRequest() error",
+		Skeleton:           "FILE: svc/handler.go\nQUERYABLE_FUNCTIONS\n  svc/handler.go#HandleRequest",
 		ExplorationContext: "Need call graph evidence before assigning modules",
 		PreviousResponses: []*PlannerResponseEnvelope{{
 			Type:   "read_file",
@@ -163,6 +201,7 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 		"owner",
 		"Previous responses:",
 		"svc/handler.go",
+		"QUERYABLE_FUNCTIONS",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
@@ -170,8 +209,84 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 	}
 }
 
+func TestBuildInteractivePlannerPromptStatesOnlyQueryableFunctionsAreCallable(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/service.go\n<methods>\nsvc/service.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82\n</methods>\n</file>"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, want := range []string{
+		"FuncID: exact queryable function reference.",
+		"Use read_file for broader file context.",
+		"Use read_function and call_chain only with exact FuncID values shown in the skeleton.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptPlacesMethodLegendBeforeSkeleton(t *testing.T) {
+	contextState := &PlannerRoundContext{
+		Round: 1,
+		Skeleton: `<file>
+svc/handler.go
+<methods>
+svc/handler.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82
+</methods>
+</file>`,
+	}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	legendIdx := strings.Index(got, "Method line format:")
+	skeletonIdx := strings.Index(got, "Skeleton:")
+	if legendIdx == -1 || skeletonIdx == -1 || legendIdx > skeletonIdx {
+		t.Fatalf("legend must appear before skeleton:\n%s", got)
+	}
+}
+
+func TestBuildInteractivePlannerPromptExplainsMethodMetricFields(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/handler.go\n</file>"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, want := range []string{
+		"FuncID: exact queryable function reference.",
+		"loc: lines of code",
+		"out: internal outbound call count",
+		"depth: distance from an inferred entry point; -1 means unreachable",
+		"reach: number of inferred entry points that can reach this function",
+		"exported: whether the function is public/exported",
+		"entry: whether the function is an inferred entry point",
+		"imp: normalized importance score",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptTreatsEventLandmarksAsOptional(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/handler.go\n<methods>\nsvc/handler.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82\n</methods>\n</file>"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	if !strings.Contains(got, "Event landmark format:") {
+		t.Fatalf("buildInteractivePlannerPrompt() missing event landmark legend:\n%s", got)
+	}
+	for _, unwanted := range []string{
+		"some files may not have event landmarks",
+		"if event_landmarks is absent",
+		"missing event section",
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("buildInteractivePlannerPrompt() unexpectedly contained %q:\n%s", unwanted, got)
+		}
+	}
+}
+
 func TestBuildInteractivePlannerPromptUsesReceiverAwareMethodExamples(t *testing.T) {
-	contextState := &PlannerRoundContext{Round: 1, Skeleton: "// svc/service.go"}
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "FILE: svc/service.go"}
 
 	got := buildInteractivePlannerPrompt(contextState, 3)
 
@@ -181,6 +296,39 @@ func TestBuildInteractivePlannerPromptUsesReceiverAwareMethodExamples(t *testing
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptUsesTopLevelModulesAndNavigationSchema(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 2, Skeleton: "FILE: svc/handler.go"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, want := range []string{
+		`{"round":N,"understanding":"...","requests":[...]}`,
+		`{"round":N,"modules":[...],"navigation":{"sections":[...]}}`,
+		`"modules":[{"id":"module","files":["path/to/file.go"]`,
+		`"navigation":{"sections":[{"type":"generated"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuildInteractivePlannerPromptDoesNotNestModulesUnderNavigation(t *testing.T) {
+	contextState := &PlannerRoundContext{Round: 2, Skeleton: "FILE: svc/handler.go"}
+
+	got := buildInteractivePlannerPrompt(contextState, 3)
+
+	for _, unwanted := range []string{
+		`{"round":N,"navigation":{"modules":[...]}}`,
+		`Final navigation should include version`,
+		`Final navigation must stay modules-compatible for now.`,
+	} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("buildInteractivePlannerPrompt() unexpectedly contained %q:\n%s", unwanted, got)
 		}
 	}
 }
@@ -242,14 +390,14 @@ func TestRunInteractivePlannerStopsAfterMaxRounds(t *testing.T) {
 	}
 }
 
-func TestRunInteractivePlannerStopsWhenNavigationReturned(t *testing.T) {
+func TestRunInteractivePlannerStopsWhenModulesAndNavigationReturned(t *testing.T) {
 	t.Helper()
 
 	cfg := sampleInteractivePlannerConfig(t)
 	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
 	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
 
-	client := llm.NewMockClient(`{"round":1,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`)
+	client := llm.NewMockClient(`{"round":1,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent","navigation_refs":["generated"]}],"navigation":{"sections":[{"type":"generated","title":"Service Overview","items":[{"title":"Handle Request","path":"docs/modules/svc.md","entry_point":"svc/handler.go#HandleRequest"}]}]}}`)
 
 	got, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
 	if err != nil {
@@ -260,6 +408,102 @@ func TestRunInteractivePlannerStopsWhenNavigationReturned(t *testing.T) {
 	}
 	if client.CallCount() != 1 {
 		t.Fatalf("MockClient.CallCount() = %d, want 1", client.CallCount())
+	}
+	if got.Navigation == nil || len(got.Navigation.Sections) != 1 {
+		t.Fatalf("RunInteractivePlanner() navigation = %#v, want one section", got.Navigation)
+	}
+}
+
+func TestRunInteractivePlannerAcceptsModulesOnlyTerminalPayload(t *testing.T) {
+	t.Helper()
+
+	cfg := sampleInteractivePlannerConfig(t)
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(`{"round":1,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`)
+
+	got, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunInteractivePlanner() error = %v", err)
+	}
+	if got == nil || len(got.Modules) != 1 {
+		t.Fatalf("RunInteractivePlanner() modules = %#v, want one module", got)
+	}
+	if got.Navigation != nil {
+		t.Fatalf("RunInteractivePlanner() navigation = %#v, want nil", got.Navigation)
+	}
+}
+
+func TestRunInteractivePlannerRejectsNavigationOnlyTerminalPayload(t *testing.T) {
+	t.Helper()
+
+	cfg := sampleInteractivePlannerConfig(t)
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(`{"round":1,"navigation":{"sections":[{"type":"generated","title":"Service Overview"}]}}`)
+
+	_, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
+	if err == nil {
+		t.Fatal("RunInteractivePlanner() error = nil, want missing modules error")
+	}
+	if !strings.Contains(err.Error(), "interactive terminal payload missing modules") {
+		t.Fatalf("RunInteractivePlanner() error = %v, want missing modules context", err)
+	}
+}
+
+func TestRunInteractivePlannerReportsModuleValidationAfterAssembly(t *testing.T) {
+	t.Helper()
+
+	cfg := sampleInteractivePlannerConfig(t)
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(`{"round":1,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go"],"shared":false,"owner":"agent","navigation_refs":["generated"]}],"navigation":{"sections":[{"type":"generated","title":"Service Overview"}]}}`)
+
+	_, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
+	if err == nil {
+		t.Fatal("RunInteractivePlanner() error = nil, want validation error")
+	}
+	if !strings.Contains(err.Error(), "missing file assignment") {
+		t.Fatalf("RunInteractivePlanner() error = %v, want missing file assignment context", err)
+	}
+}
+
+func TestRunInteractivePlannerSetsVersionOnAssembledPlan(t *testing.T) {
+	t.Helper()
+
+	cfg := sampleInteractivePlannerConfig(t)
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(`{"round":1,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent","navigation_refs":["generated"]}],"navigation":{"sections":[{"type":"generated","title":"Service Overview"}]}}`)
+
+	got, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
+	if err != nil {
+		t.Fatalf("RunInteractivePlanner() error = %v", err)
+	}
+	if got.Version != plannerNavPlanVersion {
+		t.Fatalf("RunInteractivePlanner() Version = %q, want %q", got.Version, plannerNavPlanVersion)
+	}
+}
+
+func TestRunInteractivePlannerPreservesNavigationRefsValidation(t *testing.T) {
+	t.Helper()
+
+	cfg := sampleInteractivePlannerConfig(t)
+	idx, depGraph, callGraph, eventIdx := buildInteractivePlannerFixtures(t)
+	writeInteractivePlannerArtifacts(t, cfg, callGraph, eventIdx)
+
+	client := llm.NewMockClient(`{"round":1,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent","navigation_refs":["api"]}],"navigation":{"sections":[{"type":"generated","title":"Service Overview"}]}}`)
+
+	_, err := RunInteractivePlanner(context.Background(), idx, depGraph, cfg, client)
+	if err == nil {
+		t.Fatal("RunInteractivePlanner() error = nil, want navigation ref validation error")
+	}
+	if !strings.Contains(err.Error(), "unknown navigation ref") {
+		t.Fatalf("RunInteractivePlanner() error = %v, want unknown navigation ref context", err)
 	}
 }
 

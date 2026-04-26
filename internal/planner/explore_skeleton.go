@@ -2,6 +2,7 @@ package planner
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/scalaview/wikismit/internal/metrics"
@@ -10,18 +11,18 @@ import (
 
 // SkeletonFilterConfig controls which functions are included in the exploration skeleton.
 type SkeletonFilterConfig struct {
-	MinFuncLines  int     // minimum lines of code (default: 5)
-	MinCalledBy   int     // minimum CalledBy count (default: 1)
-	MinImportance float64 // minimum ImportanceScore (default: 0.05)
-	IncludeEventHints bool // include likely event hints in Round 1 skeleton
+	MinFuncLines      int     // minimum lines of code (default: 5)
+	MinCalledBy       int     // minimum CalledBy count (default: 1)
+	MinImportance     float64 // minimum ImportanceScore (default: 0.05)
+	IncludeEventHints bool    // include likely event hints in Round 1 skeleton
 }
 
 // DefaultSkeletonFilterConfig returns the recommended filter configuration.
 func DefaultSkeletonFilterConfig() SkeletonFilterConfig {
 	return SkeletonFilterConfig{
-		MinFuncLines:  5,
-		MinCalledBy:   1,
-		MinImportance: 0.05,
+		MinFuncLines:      5,
+		MinCalledBy:       1,
+		MinImportance:     0.05,
 		IncludeEventHints: false,
 	}
 }
@@ -29,6 +30,9 @@ func DefaultSkeletonFilterConfig() SkeletonFilterConfig {
 // shouldIncludeFunction decides whether a function appears in the exploration skeleton.
 func shouldIncludeFunction(fn *store.FunctionDecl, m *store.FunctionMetrics, cbc int, cfg SkeletonFilterConfig) bool {
 	if m != nil && m.IsEntryPoint {
+		return true
+	}
+	if isWiringLikeFunction(fn, cbc, cfg.IncludeEventHints) {
 		return true
 	}
 	if fn.Exported && cbc > 0 {
@@ -49,6 +53,25 @@ func shouldIncludeFunction(fn *store.FunctionDecl, m *store.FunctionMetrics, cbc
 		return false
 	}
 	return true
+}
+
+func isWiringLikeFunction(fn *store.FunctionDecl, cbc int, includeHints bool) bool {
+	if fn == nil {
+		return false
+	}
+	name := strings.ToLower(fn.Name)
+	for _, needle := range []string{"registerhandlers", "setuprouter", "initbus", "bootstrapevents"} {
+		if strings.Contains(name, needle) {
+			return true
+		}
+	}
+	path := strings.ToLower(fn.Path)
+	for _, needle := range []string{"bootstrap/", "router/", "setup/", "wiring/", "register/"} {
+		if strings.Contains(path, needle) {
+			return fn.Exported || cbc > 0 || hasVisibleEventLandmarks(fn, includeHints)
+		}
+	}
+	return false
 }
 
 // countOutDegree returns the number of outbound calls for a function.
@@ -153,6 +176,15 @@ func buildExploreFileBlock(file string, entry *store.FileEntry, filter *metrics.
 		return nil, 0
 	}
 
+	sort.SliceStable(includedFns, func(i, j int) bool {
+		leftHasLandmarks := hasVisibleEventLandmarks(includedFns[i], cfg.IncludeEventHints)
+		rightHasLandmarks := hasVisibleEventLandmarks(includedFns[j], cfg.IncludeEventHints)
+		if leftHasLandmarks != rightHasLandmarks {
+			return leftHasLandmarks
+		}
+		return false
+	})
+
 	header := fmt.Sprintf("// %s", file)
 	if isEntry {
 		header += " [entry]"
@@ -217,4 +249,8 @@ func eventLandmarkLines(fn *store.FunctionDecl, includeHints bool) []string {
 		appendFacts("event hint register:", fn.EventHints.LikelyRegisters)
 	}
 	return lines
+}
+
+func hasVisibleEventLandmarks(fn *store.FunctionDecl, includeHints bool) bool {
+	return len(eventLandmarkLines(fn, includeHints)) > 0
 }

@@ -92,9 +92,12 @@ func buildInteractivePlannerPrompt(contextState *PlannerRoundContext, threshold 
 
 	var sb strings.Builder
 	_, _ = fmt.Fprintf(&sb, `You are a software architect running a bounded multi-round planning protocol.
-You may request more context before returning the final modules JSON.
+You may request more context before returning final modules JSON.
 
 Round: %d
+
+Your goal in this round is to identify high-signal files, functions, and event-related flows worth exploring next.
+Do not make strong system-level claims unless later evidence supports them.
 
 Available request types:
 - read_file {"target":"path/to/file.go"}
@@ -104,13 +107,41 @@ Available request types:
 - call_chain {"function_ref":"path/to/file.go#Receiver#Method","direction":"downstream|upstream","depth":N,"include_events":bool}
 - event_flow {"event_name":"name","expand_publishers":bool,"expand_handlers":bool,"handler_depth":N}
 
+Method line format:
+<FuncID> | <Signature> | loc=<n> out=<n> depth=<n|-1> reach=<n> exported=<0|1> entry=<0|1> imp=<0.00-1.00>
+
+Field meanings:
+- FuncID: exact queryable function reference.
+- loc: lines of code.
+- out: internal outbound call count.
+- depth: distance from an inferred entry point; -1 means unreachable.
+- reach: number of inferred entry points that can reach this function.
+- exported: whether the function is public/exported.
+- entry: whether the function is an inferred entry point.
+- imp: normalized importance score.
+
+Event landmark format:
+publish <EventName> @ <FuncID>
+handle <EventName> @ <FuncID>
+register <EventName> @ <FuncID>
+
+Event landmarks are grounded event facts, not semantic summaries.
+
+How to use these signals:
+- Prioritize functions with entry=1, high imp, high out, high reach, or event landmarks.
+- Treat metrics as structural prioritization hints, not semantic conclusions.
+- Do not infer repository kind, business domains, or architecture style from metrics alone.
+- Use read_file for broader file context.
+- Use read_function and call_chain only with exact FuncID values shown in the skeleton.
+
 Rules:
 - If you still need evidence, return JSON with: {"round":N,"understanding":"...","requests":[...]}
-- If you are ready to finish, return JSON with: {"round":N,"navigation":{"modules":[...]}}
-- Final navigation should include version and may include navigation.sections.
-- Final navigation must stay modules-compatible for now.
+- If you are ready to finish, return JSON with: {"round":N,"modules":[...],"navigation":{"sections":[...]}}
+- Terminal payload must use top-level ` + "`modules`" + ` and optional top-level ` + "`navigation`" + `.
+- Terminal ` + "`navigation`" + ` maps to ` + "`store.Navigation`" + ` subtree only.
+- Terminal ` + "`navigation`" + ` must not wrap another ` + "`modules`" + ` object and must not be presented as a full NavPlan.
 - Every file must appear in exactly one module.
-- Modules stay required for compatibility, even when navigation.sections is present.
+- Modules are always required in terminal payload, even when navigation.sections is present.
 - Every module must include owner.
 - Shared modules must have owner: "shared_preprocessor".
 - Non-shared modules must have owner: "agent".
@@ -121,6 +152,7 @@ Rules:
 - Shared utilities are files used by %d+ modules.
 - Respond ONLY with valid JSON. No markdown fences or prose.
 
+Navigation schema:
 `, contextState.Round, threshold)
 
 	if contextState.ExplorationContext != "" {
@@ -148,8 +180,9 @@ Rules:
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Navigation schema:\n")
-	sb.WriteString(`{"version":"planner/v2","navigation":{"sections":[{"type":"generated","title":"Generated Overview","description":"...","items":[{"title":"Entry","path":"docs/modules/module.md","entry_point":"path/to/file.go#Name","events":["domain.event"],"highlights":["important detail"]}]},{"type":"modules","title":"Modules","items":[{"title":"Module","path":"docs/modules/module.md"}]}]},"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[],"navigation_refs":["generated","modules"]}]}`)
+	sb.WriteString(`{"round":N,"understanding":"...","requests":[{"type":"call_chain","params":{"function_ref":"path/to/file.go#Name","direction":"downstream","depth":2}}]}`)
+	sb.WriteString("\n")
+	sb.WriteString(`{"round":N,"modules":[{"id":"module","files":["path/to/file.go"],"shared":false,"owner":"agent","depends_on_shared":[],"referenced_by":[],"navigation_refs":["generated","modules"]}],"navigation":{"sections":[{"type":"generated","title":"Generated Overview","description":"...","items":[{"title":"Entry","path":"docs/modules/module.md","entry_point":"path/to/file.go#Name","events":["domain.event"],"highlights":["important detail"]}]},{"type":"modules","title":"Modules","items":[{"title":"Module","path":"docs/modules/module.md"}]}]}}`)
 	sb.WriteString("\n\nSkeleton:\n")
 	sb.WriteString(contextState.Skeleton)
 

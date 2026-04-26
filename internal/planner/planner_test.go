@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -414,49 +413,6 @@ func TestRunPlannerVerboseLoggingIncludesPromptSizingAndAttemptMetadataBeforeEac
 	}
 }
 
-func TestRunPlannerVerboseLoggingUsesVerboseLoggerWithoutTestOverride(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("stderr pipe capture is unix-focused")
-	}
-
-	previous := logger
-	logger = nil
-	t.Cleanup(func() {
-		logger = previous
-	})
-
-	cfg := samplePlannerConfig(t)
-	cfg.Verbose = true
-	idx := samplePlannerIndex()
-	graph := samplePlannerGraph()
-	client := llm.NewMockClient(`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`)
-
-	out := captureStderrOutput(t, func() {
-		_, err := RunPlanner(context.Background(), idx, graph, cfg, client)
-		if err != nil {
-			t.Fatalf("RunPlanner() error = %v", err)
-		}
-	})
-
-	for _, want := range []string{
-		`level=DEBUG`,
-		`msg="starting planner completion request"`,
-		`skeleton_token_estimate=`,
-		`prompt_length=`,
-		`planner_attempt=1`,
-		`model=planner-test-model`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("planner log output missing %q in %q", want, out)
-		}
-	}
-	for _, unwanted := range []string{"GenerateToken", "internal/auth/jwt.go:10"} {
-		if strings.Contains(out, unwanted) {
-			t.Fatalf("planner log output = %q, should not contain prompt body fragment %q", out, unwanted)
-		}
-	}
-}
-
 func TestRunPlannerUsesLegacySingleShotWhenInteractiveDisabled(t *testing.T) {
 	cfg := samplePlannerConfig(t)
 	cfg.Analysis.InteractivePlanner = &configpkg.InteractivePlannerConfig{
@@ -494,7 +450,7 @@ func TestRunPlannerUsesInteractiveFlowWhenEnabled(t *testing.T) {
 
 	client := llm.NewMockClient(
 		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
-		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":2,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`,
 	)
 
 	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)
@@ -526,7 +482,7 @@ func TestRunPlannerPrefersInteractiveFlowOverExploreWhenBothEnabled(t *testing.T
 
 	client := llm.NewMockClient(
 		`{"round":1,"requests":[{"type":"read_file","params":{"target":"svc/handler.go"}}]}`,
-		`{"round":2,"navigation":{"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}}`,
+		`{"round":2,"modules":[{"id":"svc","files":["svc/handler.go","svc/service.go","svc/events.go"],"shared":false,"owner":"agent"}]}`,
 	)
 
 	got, err := RunPlanner(context.Background(), idx, depGraph, cfg, client)

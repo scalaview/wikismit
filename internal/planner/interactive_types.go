@@ -6,7 +6,8 @@ type PlannerRoundRequest struct {
 	Round         int               `json:"round"`
 	Understanding string            `json:"understanding,omitempty"`
 	Requests      []*PlannerRequest `json:"requests,omitempty"`
-	Navigation    *json.RawMessage  `json:"navigation,omitempty"`
+	Modules       json.RawMessage   `json:"modules,omitempty"`
+	Navigation    json.RawMessage   `json:"navigation,omitempty"`
 }
 
 type PlannerRequest struct {

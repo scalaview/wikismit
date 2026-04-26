@@ -63,13 +63,30 @@ func RunInteractivePlanner(ctx context.Context, idx store.FileIndex, graph store
 
 		contextState.ExplorationContext = roundRequest.Understanding
 
-		if roundRequest.Navigation != nil {
-			plan, err := parseInteractiveNavigation(*roundRequest.Navigation, idx)
+		if len(roundRequest.Modules) > 0 {
+			modules, err := parseInteractiveModules(roundRequest.Modules)
 			if err != nil {
 				return nil, err
 			}
+
+			var navigation *store.Navigation
+			if len(roundRequest.Navigation) > 0 {
+				navigation, err = parseInteractiveNavigation(roundRequest.Navigation)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			plan := assembleInteractiveNavPlan(modules, navigation)
 			stampNavPlanMetadata(plan)
+			if err := validateNavPlan(*plan, idx); err != nil {
+				return nil, err
+			}
 			return plan, nil
+		}
+
+		if len(roundRequest.Navigation) > 0 {
+			return nil, fmt.Errorf("interactive terminal payload missing modules")
 		}
 
 		if len(roundRequest.Requests) == 0 {
@@ -157,15 +174,28 @@ func routePlannerRequest(idx store.FileIndex, callGraph store.CallGraph, eventId
 	}
 }
 
-func parseInteractiveNavigation(raw json.RawMessage, idx store.FileIndex) (*store.NavPlan, error) {
-	var plan store.NavPlan
-	if err := json.Unmarshal(raw, &plan); err != nil {
+func parseInteractiveModules(raw json.RawMessage) ([]*store.Module, error) {
+	modules := make([]*store.Module, 0)
+	if err := json.Unmarshal(raw, &modules); err != nil {
+		return nil, fmt.Errorf("parse modules: %w", err)
+	}
+	return modules, nil
+}
+
+func parseInteractiveNavigation(raw json.RawMessage) (*store.Navigation, error) {
+	var navigation store.Navigation
+	if err := json.Unmarshal(raw, &navigation); err != nil {
 		return nil, fmt.Errorf("parse navigation: %w", err)
 	}
-	if err := validateNavPlan(plan, idx); err != nil {
-		return nil, fmt.Errorf("validate navigation: %w", err)
+	return &navigation, nil
 	}
-	return &plan, nil
+
+func assembleInteractiveNavPlan(modules []*store.Module, navigation *store.Navigation) *store.NavPlan {
+	plan := &store.NavPlan{Modules: modules}
+	if navigation != nil {
+		plan.Navigation = navigation
+	}
+	return plan
 }
 func appendRoundNote(existing string, note string) string {
 	if note == "" {

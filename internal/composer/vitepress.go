@@ -16,12 +16,18 @@ type vitepressSidebarItem struct {
 	Link string
 }
 
+type vitepressSidebarGroup struct {
+	Text  string
+	Items []vitepressSidebarItem
+}
+
 type vitepressTemplateData struct {
-	Title       string
-	Modules     []vitepressSidebarItem
-	Shared      []vitepressSidebarItem
-	HasEditLink bool
-	RepoURL     string
+	Title              string
+	NavigationSections []vitepressSidebarGroup
+	Modules            []vitepressSidebarItem
+	Shared             []vitepressSidebarItem
+	HasEditLink        bool
+	RepoURL            string
 }
 
 const docsPackageJSON = `{
@@ -39,6 +45,22 @@ const docsPackageJSON = `{
 
 func GenerateVitePressConfig(plan *store.NavPlan, graph store.DepGraph, cfg *configpkg.Config) (string, error) {
 	_ = graph
+
+	navigationSections := make([]vitepressSidebarGroup, 0)
+	if plan != nil && plan.Navigation != nil {
+		for _, section := range plan.Navigation.Sections {
+			if section == nil {
+				continue
+			}
+			navigationSections = append(navigationSections, vitepressSidebarGroup{
+				Text: section.Title,
+				Items: []vitepressSidebarItem{{
+					Text: section.Title,
+					Link: "/generated/" + GenerateSectionFilename(section) + ".md",
+				}},
+			})
+		}
+	}
 
 	modules := make([]vitepressSidebarItem, 0)
 	shared := make([]vitepressSidebarItem, 0)
@@ -58,17 +80,26 @@ func GenerateVitePressConfig(plan *store.NavPlan, graph store.DepGraph, cfg *con
 	sort.Slice(modules, func(i int, j int) bool { return modules[i].Text < modules[j].Text })
 	sort.Slice(shared, func(i int, j int) bool { return shared[i].Text < shared[j].Text })
 
-	title := cfg.Site.Title
+	var site *configpkg.SiteConfig
+	if cfg != nil {
+		site = cfg.Site
+	}
+
+	title := ""
+	if site != nil {
+		title = site.Title
+	}
 	if title == "" {
 		title = filepath.Base(cfg.RepoPath)
 	}
 
 	data := vitepressTemplateData{
-		Title:       title,
-		Modules:     modules,
-		Shared:      shared,
-		HasEditLink: cfg.Site.RepoURL != "",
-		RepoURL:     cfg.Site.RepoURL,
+		Title:              title,
+		NavigationSections: navigationSections,
+		Modules:            modules,
+		Shared:             shared,
+		HasEditLink:        site != nil && site.RepoURL != "",
+		RepoURL:            repoURL(site),
 	}
 
 	var buf bytes.Buffer
@@ -76,6 +107,13 @@ func GenerateVitePressConfig(plan *store.NavPlan, graph store.DepGraph, cfg *con
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func repoURL(site *configpkg.SiteConfig) string {
+	if site == nil {
+		return ""
+	}
+	return site.RepoURL
 }
 
 func WriteVitePressAssets(docsDir string, configText string, cfg *configpkg.Config) error {
@@ -90,7 +128,7 @@ func WriteVitePressAssets(docsDir string, configText string, cfg *configpkg.Conf
 		return err
 	}
 
-	if cfg.Site.Logo == "" {
+	if cfg == nil || cfg.Site == nil || cfg.Site.Logo == "" {
 		return nil
 	}
 
