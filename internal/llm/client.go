@@ -111,6 +111,11 @@ func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, pre
 		"started_at", start.Format(time.RFC3339Nano),
 	)
 
+	c.logger.Debug("requesting chat completion",
+		"user_prompt: ", req.UserMsg,
+		"sys_prompt: ", req.SystemMsg,
+	)
+
 	msgs := make([]openai.ChatCompletionMessage, 0, 4)
 	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: req.SystemMsg})
 	msgs = append(msgs, openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: req.UserMsg})
@@ -145,6 +150,7 @@ func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, pre
 			fields = append(fields, "error_type", fmt.Sprintf("%T", err))
 		}
 		c.logger.Debug("finished chat completion request", fields...)
+		c.logger.Debug("chat completion response", "response", resp, "error", err)
 	}
 	if err != nil {
 		normalizedErr := normalizeLLMError(err)
