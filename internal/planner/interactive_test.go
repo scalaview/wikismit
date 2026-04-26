@@ -210,14 +210,14 @@ func TestBuildInteractivePlannerPromptIncludesToolSchemaAndRoundState(t *testing
 }
 
 func TestBuildInteractivePlannerPromptStatesOnlyQueryableFunctionsAreCallable(t *testing.T) {
-	contextState := &PlannerRoundContext{Round: 1, Skeleton: "FILE: svc/service.go\nQUERYABLE_FUNCTIONS\n  svc/service.go#HandleRequest\nTYPES\n  Service"}
+	contextState := &PlannerRoundContext{Round: 1, Skeleton: "<file>\nsvc/service.go\n<methods>\nsvc/service.go#HandleRequest | func HandleRequest() error | loc=15 out=1 depth=0 reach=1 exported=1 entry=1 imp=0.82\n</methods>\n</file>"}
 
 	got := buildInteractivePlannerPrompt(contextState, 3)
 
 	for _, want := range []string{
-		"Use read_file only with file paths listed in FILE headers.",
-		"Use read_function and call_chain only with exact refs listed under QUERYABLE_FUNCTIONS.",
-		"Names under TYPES, INTERNAL_IMPORTS, and EVENT_LANDMARKS are informational only and are not valid function refs.",
+		"FuncID: exact queryable function reference.",
+		"Use read_file for broader file context.",
+		"Use read_function and call_chain only with exact FuncID values shown in the skeleton.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("buildInteractivePlannerPrompt() missing %q:\n%s", want, got)
