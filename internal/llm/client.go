@@ -112,8 +112,8 @@ func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, pre
 	)
 
 	c.logger.Debug("requesting chat completion",
-		"has_system_prompt", req.SystemMsg != "",
-		"user_prompt_chars", len(req.UserMsg),
+		"user_prompt", req.UserMsg,
+		"system_prompt", req.SystemMsg,
 	)
 
 	msgs := make([]openai.ChatCompletionMessage, 0, 4)
@@ -151,7 +151,7 @@ func (c *openAIClient) complete(ctx context.Context, req *CompletionRequest, pre
 		}
 		c.logger.Debug("finished chat completion request", fields...)
 		c.logger.Debug("chat completion response",
-			"choice_count", len(resp.Choices),
+			"response", resp,
 			"error", err,
 		)
 	}

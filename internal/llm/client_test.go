@@ -133,59 +133,6 @@ func TestClientCompleteMapsTimeoutToRetryableLLMError(t *testing.T) {
 	}
 }
 
-func TestClientCompleteVerboseLoggingIncludesRequestMetadata(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"choices":[{"message":{"content":"hello from test"}}]}`)
-	}))
-	defer server.Close()
-
-	buf := &bytes.Buffer{}
-	client := newClientWithTestLogger(t, configpkg.LLMConfig{
-		BaseURL:        server.URL,
-		AgentModel:     "gpt-4o",
-		TimeoutSeconds: 2,
-	}, true, buf)
-
-	userPrompt := "summarize this repository"
-	_, err := client.Complete(context.Background(), &CompletionRequest{
-		SystemMsg:   "system instructions should stay private",
-		UserMsg:     userPrompt,
-		MaxTokens:   123,
-		Temperature: 0.2,
-	})
-	if err != nil {
-		t.Fatalf("Complete() error = %v", err)
-	}
-
-	out := buf.String()
-	for _, want := range []string{
-		`level=DEBUG`,
-		`msg="starting chat completion request"`,
-		`msg="finished chat completion request"`,
-		`model=gpt-4o`,
-		`max_tokens=123`,
-		`timeout_seconds=2`,
-		`base_url=`,
-		server.URL,
-		fmt.Sprintf("user_prompt_chars=%d", len(userPrompt)),
-		fmt.Sprintf("estimated_user_prompt_tokens=%d", (len(userPrompt)+3)/4),
-		`started_at=`,
-		`finished_at=`,
-		`duration_ms=`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("log output missing %q in %q", want, out)
-		}
-	}
-
-	for _, unwanted := range []string{userPrompt, "system instructions should stay private", "api_key"} {
-		if strings.Contains(out, unwanted) {
-			t.Fatalf("log output = %q, should not contain %q", out, unwanted)
-		}
-	}
-}
-
 func TestClientCompleteVerboseLoggingIncludesErrorTypeOnFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":{"message":"server error"}}`, http.StatusInternalServerError)

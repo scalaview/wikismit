@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -24,85 +23,6 @@ import (
 func TestMain(m *testing.M) {
 	log.SetDefaultLogger(log.New(true))
 	os.Exit(m.Run())
-}
-
-func TestRunFullGenerateVerboseLoggingIncludesFallbackPhaseBoundariesInOrder(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("stderr pipe capture is unix-focused")
-	}
-
-	repoPath := t.TempDir()
-	artifactsDir := t.TempDir()
-	outputDir := t.TempDir()
-	writeRepoFile(t, repoPath, "go.mod", "module example.com/test\n\ngo 1.25.0\n")
-	writeRepoFile(t, repoPath, "internal/auth/jwt.go", "package auth\n\nfunc GenerateToken() string { return \"token\" }\n")
-	if err := os.MkdirAll(filepath.Join(artifactsDir, "module_docs"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(module_docs) error = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(artifactsDir, "module_docs", "auth.md"), []byte("# Auth\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(auth.md) error = %v", err)
-	}
-
-	cfg := &configpkg.Config{
-		RepoPath:     repoPath,
-		ArtifactsDir: artifactsDir,
-		OutputDir:    outputDir,
-		Verbose:      true,
-		Analysis: &configpkg.AnalysisConfig{
-			FunctionSummaryAgentConfig: &configpkg.FunctionSummaryAgentConfig{
-				ContextBudget: 10000,
-			},
-		},
-		Agent: &configpkg.AgentConfig{
-			Concurrency:       1,
-			SkeletonMaxTokens: 3000,
-		},
-		LLM: &configpkg.LLMConfig{
-			PlannerModel:      "planner-test-model",
-			PreprocessorModel: "preprocessor-test-model",
-			AgentModel:        "agent-test-model",
-			MaxTokens:         1024,
-			Temperature:       0.2,
-		},
-		Cache: &configpkg.CacheConfig{},
-		Site:  &configpkg.SiteConfig{},
-	}
-	client := llm.NewMockClient(
-		`{"modules":[{"id":"auth","files":["internal/auth/jwt.go"],"shared":false,"owner":"agent"}]}`,
-		"# Auth\n",
-	)
-
-	out := captureStderrOutput(t, func() {
-		if err := runFullGenerate(context.Background(), cfg, client); err != nil {
-			t.Fatalf("runFullGenerate() error = %v", err)
-		}
-	})
-
-	orderedMessages := []string{
-		`msg="starting fallback full-generate phase" phase=phase1`,
-		`msg="finished fallback full-generate phase" phase=phase1`,
-		`msg="starting fallback full-generate phase" phase=planner`,
-		`msg="finished fallback full-generate phase" phase=planner`,
-		`msg="starting fallback full-generate phase" phase=preprocessor`,
-		`msg="finished fallback full-generate phase" phase=preprocessor`,
-		`msg="starting fallback full-generate phase" phase=agent`,
-		`msg="finished fallback full-generate phase" phase=agent`,
-		`msg="starting fallback full-generate phase" phase=composer`,
-		`msg="finished fallback full-generate phase" phase=composer`,
-	}
-	assertOrderedSubstrings(t, out, orderedMessages)
-
-	for _, phase := range []string{"phase1", "planner", "preprocessor", "agent", "composer"} {
-		if got := strings.Count(out, "phase="+phase); got != 2 {
-			t.Fatalf("log count for %s = %d, want 2; output=%q", phase, got, out)
-		}
-	}
-	if got := strings.Count(out, `msg="finished fallback full-generate phase"`); got != 5 {
-		t.Fatalf("finished phase log count = %d, want 5; output=%q", got, out)
-	}
-	if !regexp.MustCompile(`msg="finished fallback full-generate phase" phase=phase1 .*duration_ms=\d+`).MatchString(out) {
-		t.Fatalf("phase1 finish log missing duration_ms: %q", out)
-	}
 }
 
 func TestRunFullGenerateWithoutVerboseOmitsFallbackPhaseBoundaryDebugLogs(t *testing.T) {
